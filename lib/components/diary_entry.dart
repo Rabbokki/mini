@@ -9,6 +9,7 @@ import '../ui/card.dart';
 import '../ui/button.dart';
 import 'dart:math';
 import '../services/diary_service.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 typedef SaveDiaryCallback = void Function(String entry, Emotion emotion, List<String>? images);
 
@@ -69,6 +70,12 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     Emotion.shape: '⭐',
     Emotion.weather: '☀️',
   };
+
+  String? _ttsAudioUrl;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isTtsLoading = false;
+  bool _isMuted = false;
+  bool _isTtsPlaying = false;
 
   @override
   void initState() {
@@ -156,6 +163,10 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
           _aiMessage = data['message'] ?? '';
           _fadeAnimationController.forward();
         });
+        // 오늘의 한마디가 갱신되면 자동으로 TTS 재생
+        if (_aiMessage.isNotEmpty) {
+          await _playTTS();
+        }
       } else {
         throw Exception('AI 메시지 요청 실패: ${utf8.decode(response.bodyBytes)}');
       }
@@ -172,6 +183,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   void dispose() {
     _entryController.dispose();
     _fadeAnimationController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -371,6 +383,74 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  Future<String?> fetchTTS(String text) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:5050/tts?text=${Uri.encodeComponent(text)}'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        return 'http://127.0.0.1:5050${data['audio_url']}';
+      } else {
+        print('TTS 요청 실패: \\${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('TTS 요청 중 오류: \\${e}');
+      return null;
+    }
+  }
+
+  Future<void> _playTTS() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (_aiMessage.isEmpty || !appState.voiceEnabled) return;
+    setState(() { _isTtsLoading = true; });
+    final url = await fetchTTS(_aiMessage);
+    setState(() { _isTtsLoading = false; });
+    if (url != null) {
+      setState(() {
+        _ttsAudioUrl = url;
+        _isTtsPlaying = true;
+        _isMuted = false;
+      });
+      await _audioPlayer.setVolume(appState.voiceVolume / 100.0);
+      await _audioPlayer.play(UrlSource(url));
+      _audioPlayer.onPlayerComplete.listen((event) {
+        setState(() { _isTtsPlaying = false; });
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('TTS 음성 생성에 실패했습니다.')),
+      );
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (_isTtsLoading || !appState.voiceEnabled) return;
+    if (!_isTtsPlaying) {
+      // 재생 시작
+      await _playTTS();
+    } else {
+      // 음소거/해제
+      if (_isMuted) {
+        await _audioPlayer.setVolume(appState.voiceVolume / 100.0);
+      } else {
+        await _audioPlayer.setVolume(0.0);
+      }
+      setState(() { _isMuted = !_isMuted; });
+    }
+  }
+
+  // 오늘의 한마디가 갱신될 때 자동으로 TTS 재생
+  @override
+  void didUpdateWidget(covariant DiaryEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((_isSaved || widget.existingEntry?.entry != null) && _aiMessage.isNotEmpty && !_isTtsPlaying && !_isTtsLoading) {
+      _playTTS();
+    }
   }
 
   @override
@@ -803,78 +883,92 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                 ),
                               ),
                             if ((_isSaved || widget.existingEntry?.entry != null) && _aiMessage.isNotEmpty)
-                              FadeTransition(
-                                opacity: _fadeAnimation,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 8.0),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(top: 16),
-                                    padding: const EdgeInsets.all(24),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: AppColors.primary.withOpacity(0.2),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  FadeTransition(
+                                    opacity: _fadeAnimation,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 8.0),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(top: 16),
+                                        padding: const EdgeInsets.all(24),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: AppColors.primary.withOpacity(0.2),
+                                          ),
+                                        ),
+                                        constraints: const BoxConstraints(minHeight: 120),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Container(
-                                              width: 40,
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primary,
-                                                borderRadius: BorderRadius.circular(20),
-                                              ),
-                                              child: Center(
-                                                child: Text(
-                                                  '🤖',
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    color: AppColors.primaryForeground,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                            Row(
                                               children: [
-                                                Text(
-                                                  '오늘의 한마디',
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.w600,
+                                                Container(
+                                                  width: 40,
+                                                  height: 40,
+                                                  decoration: BoxDecoration(
                                                     color: AppColors.primary,
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      '🤖',
+                                                      style: TextStyle(
+                                                        fontSize: 18,
+                                                        color: AppColors.primaryForeground,
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
-                                                Text(
-                                                  'AI 친구가 전하는 메시지',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: AppColors.mutedForeground,
-                                                  ),
+                                                const SizedBox(width: 12),
+                                                Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      '오늘의 한마디',
+                                                      style: TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: AppColors.primary,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      'AI 친구가 전하는 메시지',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: AppColors.mutedForeground,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const Spacer(),
+                                                IconButton(
+                                                  onPressed: (!Provider.of<AppState>(context).voiceEnabled) ? null : _toggleMute,
+                                                  icon: _isTtsLoading
+                                                      ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                                                      : Icon(_isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded, size: 28, color: AppColors.primary),
+                                                  tooltip: _isMuted ? '음소거 해제' : '음성 듣기',
                                                 ),
                                               ],
                                             ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              _aiMessage,
+                                              style: TextStyle(
+                                                color: AppColors.foreground,
+                                                height: 1.5,
+                                                fontSize: 14,
+                                              ),
+                                            ),
                                           ],
                                         ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          _aiMessage,
-                                          style: TextStyle(
-                                            color: AppColors.foreground,
-                                            height: 1.5,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
                           ],
                         ),

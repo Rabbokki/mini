@@ -1,11 +1,6 @@
-<<<<<<< HEAD
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-=======
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
->>>>>>> origin/main
 from datetime import datetime
 import os
 from dotenv import load_dotenv
@@ -14,10 +9,6 @@ import httpx
 # 환경 변수 로드
 load_dotenv()
 
-<<<<<<< HEAD
-app = Flask(__name__)
-CORS(app)
-=======
 app = FastAPI(
     title="AI Fortune Service",
     description="OpenAI를 사용한 개인화된 운세 생성 서비스",
@@ -32,21 +23,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
->>>>>>> origin/main
 
 # OpenAI API 설정
 api_key = os.getenv('OPENAI_API_KEY')
 if not api_key:
     raise ValueError("OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.")
 
-<<<<<<< HEAD
-def generate_fortune(birthday):
-=======
 class FortuneResponse(BaseModel):
     fortune: str
 
 def generate_fortune(birthday: str) -> str:
->>>>>>> origin/main
     """OpenAI GPT를 사용하여 개인화된 운세를 생성합니다."""
     try:
         current_date = datetime.now().strftime('%Y년 %m월 %d일')
@@ -93,22 +79,6 @@ def generate_fortune(birthday: str) -> str:
             raise ValueError("운세 생성에 실패했습니다.")
             
         fortune_text = fortune_text.strip()
-<<<<<<< HEAD
-
-        return {
-            "fortune": fortune_text
-        }
-    except Exception as e:
-        print(f"Error generating fortune: {str(e)}")
-        return None
-
-@app.route('/fortune')
-def get_fortune():
-    birthday = request.args.get('birthday', '')  # YYYYMMDD 형식
-    
-    if not birthday or not birthday.isdigit() or len(birthday) != 8:
-        return jsonify({'error': '올바른 생년월일을 입력해주세요 (YYYYMMDD 형식)'}), 400
-=======
         return fortune_text
 
     except Exception as e:
@@ -122,7 +92,6 @@ async def get_fortune(birthday: str = Query(..., description="생년월일 (YYYY
     # 입력 검증
     if not birthday or not birthday.isdigit() or len(birthday) != 8:
         raise HTTPException(status_code=400, detail="올바른 생년월일을 입력해주세요 (YYYYMMDD 형식)")
->>>>>>> origin/main
     
     try:
         # 생년월일 유효성 검사
@@ -131,24 +100,6 @@ async def get_fortune(birthday: str = Query(..., description="생년월일 (YYYY
         day = int(birthday[6:])
         
         if not (1900 <= year <= datetime.now().year and 1 <= month <= 12 and 1 <= day <= 31):
-<<<<<<< HEAD
-            return jsonify({'error': '올바른 생년월일을 입력해주세요.'}), 400
-            
-        # AI로 운세 생성
-        fortune_result = generate_fortune(birthday)
-        if fortune_result is None:
-            return jsonify({'error': '운세 생성 중 오류가 발생했습니다.'}), 500
-
-        return jsonify({
-            'fortune': fortune_result['fortune']
-        })
-    except ValueError:
-        return jsonify({'error': '올바른 생년월일을 입력해주세요.'}), 400
-
-if __name__ == '__main__':
-<<<<<<< HEAD
-    app.run(debug=True)
-=======
             raise HTTPException(status_code=400, detail="올바른 생년월일을 입력해주세요.")
             
         # AI로 운세 생성
@@ -182,7 +133,3 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)
->>>>>>> origin/main
-=======
-    app.run(debug=True, host='0.0.0.0', port=5002)
->>>>>>> ec3101fac74b54c58bff6fbb00dcf6d5e01fc55e
