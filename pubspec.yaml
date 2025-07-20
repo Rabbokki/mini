@@ -1,0 +1,38 @@
+name: mproj
+description: "A new Flutter project."
+publish_to: 'none' 
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.0.0
+  http: ^1.1.0
+  cupertino_icons: ^1.0.2
+  shared_preferences: ^2.2.2
+  path_provider: ^2.1.1
+  permission_handler: ^11.0.1
+  app_settings: ^5.1.1
+  just_audio: ^0.9.36
+  audio_session: ^0.1.18
+  flutter_audio_capture: ^1.1.8
+  flutter_sound: ^9.2.13
+  flutter_sound_platform_interface: ^9.2.13
+  record: ^6.0.0
+  image_picker: ^1.0.4
+  intl: ^0.18.1
+  flutter_secure_storage: ^9.0.0
+  webview_flutter: ^4.4.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

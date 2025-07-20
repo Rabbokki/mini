@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 운세</title>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .birthday-input {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .birthday-input input {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .birthday-input button {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: block;
+            margin: 20px auto;
+            width: 200px;
+        }
+        .birthday-input button:hover {
+            background-color: #45a049;
+        }
+        .birthday-input button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .birthday-input p {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .result {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            margin-top: 20px;
+            display: none;
+        }
+        .date {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .fortune-text {
+            font-size: 18px;
+            color: #333;
+            line-height: 1.6;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔮 AI 운세</h1>
+        <div class="birthday-input">
+            <input type="text" id="birthdayInput" placeholder="생년월일 8자리" maxlength="8">
+            <p>예시: 19900101</p>
+            <div class="error-message" id="errorMessage">올바른 생년월일을 입력해주세요.</div>
+            <button id="getFortune" disabled>운세 보기</button>
+        </div>
+        <div class="result" id="fortuneResult">
+            <div class="date" id="currentDate"></div>
+            <div class="fortune-text" id="fortuneText"></div>
+        </div>
+    </div>
+
+    <script>
+        // 현재 날짜 표시
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        // 생년월일 유효성 검사
+        function isValidBirthday(birthday) {
+            if (!birthday || birthday.length !== 8) return false;
+            if (!/^\d{8}$/.test(birthday)) return false;
+            
+            const year = parseInt(birthday.substring(0, 4));
+            const month = parseInt(birthday.substring(4, 6));
+            const day = parseInt(birthday.substring(6, 8));
+            
+            const currentYear = new Date().getFullYear();
+            
+            if (year < 1900 || year > currentYear) return false;
+            if (month < 1 || month > 12) return false;
+            if (day < 1 || day > 31) return false;
+            
+            return true;
+        }
+
+        // 버튼 활성화/비활성화 관리
+        function updateButton() {
+            const birthday = document.getElementById('birthdayInput').value;
+            const button = document.getElementById('getFortune');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            if (isValidBirthday(birthday)) {
+                button.disabled = false;
+                errorMessage.style.display = 'none';
+            } else {
+                button.disabled = true;
+                errorMessage.style.display = birthday ? 'block' : 'none';
+            }
+        }
+
+        // 생년월일 입력 이벤트
+        document.getElementById('birthdayInput').addEventListener('input', updateButton);
+
+        // 운세 가져오기
+        document.getElementById('getFortune').addEventListener('click', function() {
+            const birthday = document.getElementById('birthdayInput').value;
+            if (!isValidBirthday(birthday)) {
+                return;
+            }
+
+            fetch(`http://localhost:5000/fortune?birthday=${birthday}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('errorMessage').textContent = data.error;
+                        document.getElementById('errorMessage').style.display = 'block';
+                        document.getElementById('fortuneResult').style.display = 'none';
+                    } else {
+                        document.getElementById('fortuneText').textContent = data.fortune;
+                        document.getElementById('fortuneResult').style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('errorMessage').textContent = '운세를 가져오는 중 오류가 발생했습니다.';
+                    document.getElementById('errorMessage').style.display = 'block';
+                    document.getElementById('fortuneResult').style.display = 'none';
+                });
+        });
+    </script>
+</body>
+</html> 
