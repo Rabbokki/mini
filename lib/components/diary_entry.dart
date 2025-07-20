@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb; // 명시적으로 kIsWeb 임포트
 import '../models/app_state.dart';
 import '../theme.dart';
 import '../ui/card.dart';
 import '../ui/button.dart';
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import '../services/diary_service.dart';
-// dart:html은 웹에서만 사용 가능하므로 조건부 import
 
 typedef SaveDiaryCallback = void Function(String entry, Emotion emotion, List<String>? images);
 
@@ -47,16 +47,13 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   bool _isRecording = false;
   int _recordingTime = 0;
   String _recognizedText = '';
-  bool _hasText = false; // 텍스트 입력 여부를 추적하는 변수 추가
-  
+  bool _hasText = false;
+
   late AnimationController _fadeAnimationController;
   late Animation<double> _fadeAnimation;
 
   final _diaryService = DiaryService();
 
-  // ImagePicker는 실제 앱에서 image_picker 패키지로 구현
-
-  // 감정 체인 데이터
   final List<EmotionChainItem> emotionChain = [
     EmotionChainItem(emoji: '🍎', type: Emotion.fruit),
     EmotionChainItem(emoji: '🐶', type: Emotion.animal),
@@ -66,7 +63,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     EmotionChainItem(emoji: '🐱', type: Emotion.animal),
   ];
 
-  // 감정에 따른 이모티콘 매핑
   final Map<Emotion, String> emotionEmojis = {
     Emotion.fruit: '🍎',
     Emotion.animal: '🐶',
@@ -82,7 +78,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     _isSaved = widget.existingEntry?.entry != null;
     _currentEmoji = widget.existingEntry?.emoji ?? '';
     _uploadedImages = List.from(widget.existingEntry?.images ?? []);
-    _hasText = _entryController.text.trim().isNotEmpty; // 초기 텍스트 상태 설정
+    _hasText = _entryController.text.trim().isNotEmpty;
 
     _fadeAnimationController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -93,59 +89,82 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
       curve: Curves.easeInOut,
     );
 
-    // Generate AI message for existing entry when component mounts
     if (widget.existingEntry?.entry != null && _aiMessage.isEmpty) {
-      final emotion = _analyzeEmotion(widget.existingEntry!.entry!);
-      final comfortMessage = _generateComfortMessage(emotion, widget.existingEntry!.entry!);
-      setState(() {
-        _aiMessage = comfortMessage;
-      });
-      _fadeAnimationController.forward();
+      _fetchAIMessage(widget.existingEntry!.entry!);
     }
   }
 
   Future<void> _loadDiaryData() async {
-    // 인증 상태 확인
     final appState = Provider.of<AppState>(context, listen: false);
     if (!appState.isAuthenticated) {
-      return; // 인증되지 않은 경우 일기 데이터 로드하지 않음
+      return;
     }
-    
+
     try {
       final diaryData = await _diaryService.getDiaryByDate(widget.selectedDate);
       if (diaryData != null) {
         setState(() {
-          _entryController.text = diaryData['content'];
-          _uploadedImages = List<String>.from(diaryData['images']);
+          _entryController.text = diaryData['content'] ?? '';
+          _uploadedImages = List<String>.from(diaryData['images'] ?? []);
           _isSaved = true;
-          _hasText = true;
-          
-          // 감정 분석 및 메시지 생성
-          final emotion = _analyzeEmotion(diaryData['content']);
-          _aiMessage = _generateComfortMessage(emotion, diaryData['content']);
-          _currentEmoji = emotionEmojis[emotion] ?? '';
-          _fadeAnimationController.forward();
+          _hasText = _entryController.text.trim().isNotEmpty;
+          _currentEmoji = diaryData['emoji'] ?? emotionEmojis[Emotion.fruit]!;
         });
+        await _fetchAIMessage(diaryData['content']);
       }
     } catch (e) {
       print('일기 데이터 로드 중 오류 발생: $e');
-      // 인증 에러인 경우 로그인 페이지로 이동
       if (e.toString().contains('로그인이 필요합니다') || e.toString().contains('인증이 만료되었습니다')) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('로그인이 필요합니다'),
+              content: const Text('로그인이 필요합니다'),
               backgroundColor: Colors.orange,
               action: SnackBarAction(
                 label: '로그인',
                 onPressed: () {
-                  appState.setAuthenticated(false); // 로그인 페이지로 이동
+                  appState.setAuthenticated(false);
                 },
               ),
             ),
           );
         }
       }
+    }
+  }
+
+  Future<void> _fetchAIMessage(String text) async {
+    if (text.trim().isEmpty) return;
+
+    try {
+      print('Fetching AI message for text: $text');
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8001/api/analyze-diary'),
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: jsonEncode({
+          'date': widget.selectedDate,
+          'text': text,
+        }),
+      );
+
+      print('AI response status: ${response.statusCode}');
+      print('AI response body: ${utf8.decode(response.bodyBytes)}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _aiMessage = data['message'] ?? '';
+          _fadeAnimationController.forward();
+        });
+      } else {
+        throw Exception('AI 메시지 요청 실패: ${utf8.decode(response.bodyBytes)}');
+      }
+    } catch (e) {
+      print('AI 메시지 요청 중 오류: $e');
+      setState(() {
+        _aiMessage = 'AI 메시지를 가져오지 못했습니다. 다시 시도해주세요.';
+      });
+      _fadeAnimationController.forward();
     }
   }
 
@@ -156,128 +175,85 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // 음성 인식 지원 확인 (웹에서만 사용 가능)
   bool _isSpeechRecognitionSupported() {
-    // Flutter에서는 speech_to_text 패키지를 사용
-    // 여기서는 시뮬레이션
     return true;
   }
 
   Emotion _analyzeEmotion(String text) {
-    // Simple emotion analysis based on keywords
     final fruitWords = ['과일', '사과', '바나나', '딸기', '포도', '맛있', '달콤', '상큼'];
     final animalWords = ['동물', '강아지', '고양이', '새', '토끼', '귀여', '애완동물', '반려동물'];
     final shapeWords = ['모양', '원', '사각형', '삼각형', '별', '도형', '그림', '디자인'];
     final weatherWords = ['날씨', '맑은', '비', '눈', '구름', '햇빛', '바람', '기온'];
 
     final lowerText = text.toLowerCase();
-    
+
     if (fruitWords.any((word) => lowerText.contains(word))) return Emotion.fruit;
     if (animalWords.any((word) => lowerText.contains(word))) return Emotion.animal;
     if (shapeWords.any((word) => lowerText.contains(word))) return Emotion.shape;
     if (weatherWords.any((word) => lowerText.contains(word))) return Emotion.weather;
-    
-    return Emotion.fruit; // default to fruit
-  }
 
-  String _generateComfortMessage(Emotion emotion, String entryText) {
-    final messages = {
-      Emotion.fruit: [
-        "오늘은 과일처럼 상큼하고 달콤한 하루였나 봐요! 자연의 맛과 향을 만끽하는 순간들이 소중해요 🍎",
-        "신선하고 건강한 에너지가 느껴져요! 과일의 생명력처럼 활기찬 하루를 보내셨네요 🍓",
-        "달콤하고 맛있는 순간들이 가득했군요! 이런 즐거운 경험들이 더 많이 이어지길 바라요 🍊"
-      ],
-      Emotion.animal: [
-        "동물들과 함께한 특별한 하루였나 봐요! 작은 생명들과의 교감은 정말 소중한 경험이에요 🐶",
-        "귀여운 동물들처럼 순수하고 따뜻한 마음이 느껴져요! 이런 순간들이 마음을 치유해죠 🐱",
-        "자연과 생명에 대한 사랑이 전해져요! 동물들과의 만남이 특별한 의미를 준 하루였군요 🐸"
-      ],
-      Emotion.shape: [
-        "창의적이고 아름다운 모양들을 발견한 하루였나 봐요! 예술적 감성이 풍부하게 느껴져요 ⭐",
-        "기하학적이고 조화로운 패턴들처럼, 오늘 하루도 균형 잡힌 모습이었군요 🔶",
-        "다양한 형태와 색깔들이 어우러진 특별한 하루였네요! 디자인적 영감이 가득한 시간이었어요 🔷"
-      ],
-      Emotion.weather: [
-        "날씨만큼이나 변화무쌍하고 아름다운 하루였나 봐요! 자연의 힘을 느끼는 순간들이 소중해요 ☀️",
-        "맑은 하늘처럼 깨끗하고 상쾌한 기분이 드는 하루였군요! 좋은 날씨가 마음도 밝게 해줬나 봐요 🌈",
-        "계절의 변화를 온몸으로 느끼며 보낸 의미 있는 하루였네요! 자연과 하나 되는 기분이었어요 🌧️"
-      ]
-    };
-
-    final emotionMessages = messages[emotion] ?? messages[Emotion.fruit]!;
-    final random = Random();
-    return emotionMessages[random.nextInt(emotionMessages.length)];
+    return Emotion.fruit;
   }
 
   Future<void> _handleSave() async {
     if (_entryController.text.trim().isEmpty) {
       return;
     }
-    
-    // 인증 상태 확인
+
     final appState = Provider.of<AppState>(context, listen: false);
     if (!appState.isAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('일기를 저장하려면 로그인이 필요합니다'),
+          content: const Text('일기를 저장하려면 로그인이 필요합니다'),
           backgroundColor: Colors.orange,
           action: SnackBarAction(
             label: '로그인',
             onPressed: () {
-              appState.setAuthenticated(false); // 로그인 페이지로 이동
+              appState.setAuthenticated(false);
             },
           ),
         ),
       );
       return;
     }
-    
+
     setState(() {
       _isAnalyzing = true;
     });
-    
+
     try {
-      // 감정 분석
       final emotion = _analyzeEmotion(_entryController.text);
-      
-      // 일기 저장 API 호출
-      final postId = await _diaryService.createDiary(
+
+      await _diaryService.createDiary(
         content: _entryController.text,
         emotion: emotion,
         images: _uploadedImages.isNotEmpty ? _uploadedImages : null,
       );
-      
-      // 위로의 메시지 생성
-      final comfortMessage = _generateComfortMessage(emotion, _entryController.text);
-      
+
+      await _fetchAIMessage(_entryController.text);
+
       setState(() {
-        _aiMessage = comfortMessage;
         _currentEmoji = emotionEmojis[emotion]!;
         _isAnalyzing = false;
         _isSaved = true;
       });
-      
-      _fadeAnimationController.forward();
-      
-      // 일기 데이터 저장 콜백 호출
+
       widget.onSave(_entryController.text, emotion, _uploadedImages.isNotEmpty ? _uploadedImages : null);
 
-      // 성공 메시지 표시
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('일기가 저장되었습니다'),
+            content: const Text('일기가 저장되었습니다'),
             backgroundColor: AppColors.primary,
           ),
         );
       }
     } catch (e) {
-      // 에러 처리
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('일기 저장에 실패했습니다: ${e.toString()}'),
@@ -294,7 +270,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     final day = date.day;
     final dayNames = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
     final dayName = dayNames[date.weekday % 7];
-    
+
     return '${month}월 ${day}일\n$dayName';
   }
 
@@ -317,15 +293,11 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   Future<void> _handleImageUpload() async {
     if (_uploadedImages.length >= 3) return;
 
-    // 웹에서만 동작하므로 조건부 처리
     if (kIsWeb) {
-      // 웹에서는 dart:html을 사용할 수 없으므로 이미지 업로드 기능을 비활성화
-      // 실제 구현에서는 image_picker 패키지를 사용해야 함
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('이미지 업로드 기능은 모바일에서만 사용 가능합니다.')),
       );
     } else {
-      // 모바일에서는 image_picker 패키지 사용
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('이미지 업로드 기능을 구현하려면 image_picker 패키지를 추가하세요.')),
       );
@@ -339,14 +311,11 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   }
 
   Future<void> _startRecording() async {
-    // Flutter에서는 speech_to_text 패키지를 사용
-    // 여기서는 시뮬레이션
     setState(() {
       _isRecording = true;
       _recordingTime = 0;
     });
 
-    // 시뮬레이션: 1초마다 녹음 시간 증가
     while (_isRecording) {
       await Future.delayed(const Duration(seconds: 1));
       if (_isRecording) {
@@ -378,14 +347,14 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(16),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // 사용 가능한 높이를 라인 높이로 나누어 라인 개수 계산
             final lineHeight = 32.0;
-            final availableHeight = constraints.maxHeight - 32; // 패딩 고려
+            final availableHeight = constraints.maxHeight - 32;
             final lineCount = (availableHeight / lineHeight).floor();
-            
+
             return Column(
-              children: List.generate(lineCount, (index) => 
-                Container(
+              children: List.generate(
+                lineCount,
+                (index) => Container(
                   height: lineHeight,
                   decoration: BoxDecoration(
                     border: Border(
@@ -407,8 +376,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
-    
-    // 인증되지 않은 사용자를 위한 안내 화면
+
     if (!appState.isAuthenticated) {
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -419,7 +387,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
               constraints: const BoxConstraints(maxWidth: 896),
               child: Column(
                 children: [
-                  // Back Button
                   Container(
                     margin: const EdgeInsets.only(bottom: 16, top: 20),
                     child: Align(
@@ -440,8 +407,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  
-                  // 로그인 안내 메시지
                   Expanded(
                     child: Center(
                       child: ConstrainedBox(
@@ -481,11 +446,11 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                               const SizedBox(height: 32),
                               AppButton(
                                 onPressed: () {
-                                  appState.setAuthenticated(false); // 로그인 페이지로 이동
+                                  appState.setAuthenticated(false);
                                 },
                                 variant: ButtonVariant.primary,
                                 size: ButtonSize.large,
-                                child: Text('로그인하기'),
+                                child: const Text('로그인하기'),
                               ),
                             ],
                           ),
@@ -500,17 +465,16 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         ),
       );
     }
-    
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 896), // max-w-4xl
+            constraints: const BoxConstraints(maxWidth: 896),
             child: Column(
               children: [
-                // Back Button
                 Container(
                   margin: const EdgeInsets.only(bottom: 16, top: 20),
                   child: Align(
@@ -531,14 +495,12 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                
-                // Main Content
                 Expanded(
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxWidth: 448, // max-w-md
-                        maxHeight: 800, // 세로 길이 제한 추가
+                        maxWidth: 448,
+                        maxHeight: 800,
                       ),
                       child: AppCard(
                         backgroundColor: AppColors.calendarBg,
@@ -547,11 +509,9 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Date Display with Voice Recording & Photo Upload Buttons
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                // Date Display
                                 Row(
                                   children: [
                                     if (_isSaved || widget.existingEntry?.entry != null)
@@ -571,13 +531,12 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                       ),
                                     if (_isSaved || widget.existingEntry?.entry != null)
                                       const SizedBox(width: 16),
-                                    // 날짜/요일에 여백 추가
                                     Padding(
-                                      padding: const EdgeInsets.only(left: 8.0), // 왼쪽 여백 추가
+                                      padding: const EdgeInsets.only(left: 8.0),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          SizedBox(height: 8),
+                                          const SizedBox(height: 8),
                                           Text(
                                             _formatDate(widget.selectedDate),
                                             style: TextStyle(
@@ -592,12 +551,9 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                     ),
                                   ],
                                 ),
-
-                                // Voice Recording & Photo Upload Buttons
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    // 타이머 (녹음 중일 때만)
                                     if (_isRecording) ...[
                                       Container(
                                         margin: const EdgeInsets.only(right: 8),
@@ -617,7 +573,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                         ),
                                       ),
                                     ],
-                                    // 마이크 버튼
                                     AppButton(
                                       onPressed: _handleRecordingToggle,
                                       variant: ButtonVariant.ghost,
@@ -627,7 +582,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                         height: 40,
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(20),
-                                          color: _isRecording 
+                                          color: _isRecording
                                               ? Colors.red
                                               : Colors.red.withOpacity(0.1),
                                           border: Border.all(
@@ -645,7 +600,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    // 업로드 버튼
                                     if (_uploadedImages.length < 3)
                                       AppButton(
                                         onPressed: _handleImageUpload,
@@ -673,10 +627,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                 ),
                               ],
                             ),
-                            
                             const SizedBox(height: 24),
-
-                            // Uploaded Images Preview
                             if (_uploadedImages.isNotEmpty) ...[
                               GridView.builder(
                                 shrinkWrap: true,
@@ -729,8 +680,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                               ),
                               const SizedBox(height: 16),
                             ],
-
-                            // Diary Content
                             Expanded(
                               child: Container(
                                 decoration: BoxDecoration(
@@ -738,10 +687,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                 ),
                                 child: Stack(
                                   children: [
-                                    // Notebook lines
                                     _buildNotebookLines(),
-                                    
-                                    // Writing Area
                                     Positioned.fill(
                                       child: Padding(
                                         padding: const EdgeInsets.all(16),
@@ -756,8 +702,8 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                             fontSize: 16,
                                           ),
                                           decoration: InputDecoration(
-                                            hintText: widget.existingEntry?.entry != null 
-                                                ? "일기를 수정해보세요..." 
+                                            hintText: widget.existingEntry?.entry != null
+                                                ? "일기를 수정해보세요..."
                                                 : "오늘의 이야기를 작성해보세요...",
                                             hintStyle: TextStyle(
                                               color: AppColors.mutedForeground.withOpacity(0.7),
@@ -783,16 +729,13 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                 ),
                               ),
                             ),
-                            
                             const SizedBox(height: 12),
-                            
-                            // Save Button with improved disabled style
                             if (!_isSaved)
                               SizedBox(
                                 width: double.infinity,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: _hasText && !_isAnalyzing 
+                                    color: _hasText && !_isAnalyzing
                                         ? AppColors.primary
                                         : AppColors.primary.withOpacity(0.4),
                                     borderRadius: BorderRadius.circular(8),
@@ -835,17 +778,17 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                                     Icon(
                                                       Icons.send,
                                                       size: 16,
-                                                      color: _hasText && !_isAnalyzing 
+                                                      color: _hasText && !_isAnalyzing
                                                           ? AppColors.primaryForeground
                                                           : AppColors.primaryForeground.withOpacity(0.7),
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Text(
-                                                      widget.existingEntry?.entry != null 
-                                                          ? '일기 수정하기' 
+                                                      widget.existingEntry?.entry != null
+                                                          ? '일기 수정하기'
                                                           : '일기 저장하기',
                                                       style: TextStyle(
-                                                        color: _hasText && !_isAnalyzing 
+                                                        color: _hasText && !_isAnalyzing
                                                             ? AppColors.primaryForeground
                                                             : AppColors.primaryForeground.withOpacity(0.7),
                                                         fontWeight: FontWeight.w500,
@@ -859,13 +802,11 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
-
-                            // AI Message - Bottom of card
                             if ((_isSaved || widget.existingEntry?.entry != null) && _aiMessage.isNotEmpty)
                               FadeTransition(
                                 opacity: _fadeAnimation,
                                 child: Padding(
-                                  padding: const EdgeInsets.only(left: 8.0), // 왼쪽 여백 추가
+                                  padding: const EdgeInsets.only(left: 8.0),
                                   child: Container(
                                     margin: const EdgeInsets.only(top: 16),
                                     padding: const EdgeInsets.all(24),
@@ -948,4 +889,4 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
       ),
     );
   }
-} 
+}
