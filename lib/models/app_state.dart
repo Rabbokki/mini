@@ -3,7 +3,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/user_settings_service.dart';
 import '../services/diary_service.dart';
 
-enum Emotion { fruit, animal, shape, weather }
+enum Emotion { 
+  // 기본 감정들
+  angry, anxious, calm, confident, confused, determined, 
+  excited, happy, love, neutral, sad, touched,
+  // 카테고리들
+  shape, fruit, animal, weather
+}
 
 class EmotionData {
   final Emotion emotion;
@@ -53,53 +59,55 @@ class AppState extends ChangeNotifier {
   String _userName = '사용자';
   String _userEmail = '';
   String _accessToken = '';
-  Emotion _selectedEmoticonCategory = Emotion.shape;
+  Emotion _selectedEmoticonCategory = Emotion.neutral;
   String _lastSelectedEmotionCategory = 'shape';
   
   Map<String, List<String>> _emoticonCategories = {
-    'shape': ['⭐', '🔶', '🔷', '⚫', '🔺'],
-    'fruit': ['🍎', '🍊', '🍌', '🍇', '🍓'],
-    'animal': ['🐶', '🐱', '🐰', '🐸', '🐼'],
-    'weather': ['☀️', '🌧️', '⛈️', '🌈', '❄️']
+    'shape': [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa',
+    ],
+    'fruit': [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fhappy_fruit-removebg-preview.png?alt=media&token=d10a503b-fee7-4bc2-b141-fd4b33dae1f1',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fsad_fruit-removebg-preview.png?alt=media&token=e9e0b0f7-6590-4209-a7d1-26377eb33c05',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fexcited_fruit-removebg-preview.png?alt=media&token=0284bce2-aa88-4766-97fb-5d5d2248cf31',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fangry_fruit-removebg-preview.png?alt=media&token=679778b9-5a1b-469a-8e86-b01585cb1ee2',
+    ],
+    'animal': [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fhappy_animal-removebg-preview.png?alt=media&token=66ff8e2d-d941-4fd7-9d7f-9766db03cbd5',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fsad_animal-removebg-preview.png?alt=media&token=04c99bd8-8ad4-43de-91cd-3b7354780677',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fexcited_animal-removebg-preview.png?alt=media&token=48442937-5504-4392-88a9-039aef405f14',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fangry_animal-removebg-preview.png?alt=media&token=9bde31db-8801-4af0-9368-e6ce4a35fbac',
+    ],
+    'weather': [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fhappy_weather-removebg-preview.png?alt=media&token=fd77e998-6f47-459a-bd1c-458e309fed41',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fsad_weather-removebg-preview.png?alt=media&token=aa972b9a-8952-4dc7-abe7-692ec7be0d16',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fexcited_weather-removebg-preview.png?alt=media&token=5de71f38-1178-4e3c-887e-af07547caba9',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fangry_weather-removebg-preview.png?alt=media&token=2f4c6212-697d-49b7-9d5e-ae1f2b1fa84e',
+    ]
   };
   
-  final Map<String, EmotionData> _emotionData = {
-    '2024-02-01': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-02': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-03': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-04': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-05': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-06': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-07': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-08': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-09': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-10': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-11': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-12': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-13': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-14': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-15': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-16': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-17': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-18': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-19': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-20': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-21': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-22': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-23': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-24': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-25': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-    '2024-02-26': EmotionData(emotion: Emotion.animal, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'),
-    '2024-02-27': EmotionData(emotion: Emotion.shape, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'),
-    '2024-02-28': EmotionData(emotion: Emotion.weather, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f'),
-    '2024-02-29': EmotionData(emotion: Emotion.fruit, emoji: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'),
-  };
+  final Map<String, EmotionData> _emotionData = {};
 
   static const Map<Emotion, String> emotionEmojis = {
-    Emotion.fruit: '🍎',
-    Emotion.animal: '🐶',
-    Emotion.shape: '⭐',
-    Emotion.weather: '☀️',
+    Emotion.angry: '😠',
+    Emotion.anxious: '😰',
+    Emotion.calm: '😌',
+    Emotion.confident: '😎',
+    Emotion.confused: '😕',
+    Emotion.determined: '😤',
+    Emotion.excited: '🤩',
+    Emotion.happy: '😊',
+    Emotion.love: '🥰',
+    Emotion.neutral: '😐',
+    Emotion.sad: '😢',
+    Emotion.touched: '🥺',
   };
 
   // Getters
@@ -125,6 +133,12 @@ class AppState extends ChangeNotifier {
   }
 
   void _checkAuthStatus() async {
+    // 임시로 항상 인증 상태로 설정 (테스트용)
+    setAuthenticated(true);
+    print('AppState: 인증 상태를 true로 설정했습니다.');
+    
+    // 원래 코드는 주석 처리
+    /*
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
     if (token != null) {
@@ -138,6 +152,7 @@ class AppState extends ChangeNotifier {
         await handleLogout();
       }
     }
+    */
   }
 
   void _loadEmoticonSetting() async {
@@ -288,13 +303,17 @@ class AppState extends ChangeNotifier {
   Future<void> loadDiaryData() async {
     try {
       final diaryData = await DiaryService.getDiaryEntries();
+      // 기존 데이터 초기화
+      _emotionData.clear();
+      
       // 일기 데이터를 _emotionData에 병합
       for (final entry in diaryData) {
         final date = entry['date'] as String;
         final emotion = Emotion.values.firstWhere(
           (e) => e.name == entry['emotion'],
-          orElse: () => Emotion.shape,
+          orElse: () => Emotion.neutral,
         );
+        // 백엔드에서 가져온 이모지 URL 사용 (Firebase URL)
         final emoji = entry['emoji'] as String? ?? emotionEmojis[emotion]!;
         final diaryEntry = entry['entry'] as String?;
         final images = entry['images'] as List<String>?;
@@ -313,16 +332,15 @@ class AppState extends ChangeNotifier {
   }
 
   void saveDiary(String entry, Emotion emotion, List<String>? images) {
-    final Map<Emotion, String> firebaseEmojis = {
-      Emotion.fruit: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39',
-      Emotion.animal: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f',
-      Emotion.shape: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5',
-      Emotion.weather: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f',
-    };
+    // 사용자 설정에서 선택된 카테고리의 이모지 URL 가져오기
+    final selectedCategory = _lastSelectedEmotionCategory;
+    final categoryEmojis = _emoticonCategories[selectedCategory] ?? [];
+    final emojiUrl = categoryEmojis.isNotEmpty ? categoryEmojis[0] : 
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
     
     _emotionData[_selectedDate] = EmotionData(
       emotion: emotion,
-      emoji: firebaseEmojis[emotion]!,
+      emoji: emojiUrl,
       entry: entry,
       images: images,
     );

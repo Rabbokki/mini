@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 
 class STTService {
-  static const String _baseUrl = 'http://192.168.43.129:8000/api';
+  static const String _baseUrl = 'http://192.168.43.129:5002';
   
   /// 오디오 파일을 텍스트로 변환
   static Future<STTResult> transcribeAudio(File audioFile, {String language = 'ko'}) async {
@@ -15,7 +15,7 @@ class STTService {
       // multipart request 생성
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_baseUrl/asr/'),
+        Uri.parse('$_baseUrl/stt/transcribe'),
       );
 
       // 오디오 파일을 바이트로 추가 (Content-Length 문제 해결)
@@ -61,7 +61,7 @@ class STTService {
       // multipart request 생성
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_baseUrl/asr/'),
+        Uri.parse('$_baseUrl/stt/transcribe-chunk'),
       );
 
       // 오디오 파일을 바이트로 추가 (Content-Length 문제 해결)
@@ -107,8 +107,8 @@ class STTService {
   /// 서비스 상태 확인
   static Future<Map<String, dynamic>> healthCheck() async {
     try {
-      print('STT 서비스 연결 테스트: $_baseUrl/../health');
-      final response = await http.get(Uri.parse('$_baseUrl/../health'));
+      print('STT 서비스 연결 테스트: $_baseUrl/stt/health');
+      final response = await http.get(Uri.parse('$_baseUrl/stt/health'));
       
       print('STT 서비스 응답 상태: ${response.statusCode}');
       print('STT 서비스 응답 내용: ${response.body}');
@@ -127,7 +127,7 @@ class STTService {
   /// 지원하는 언어 목록 가져오기
   static Future<Map<String, String>> getSupportedLanguages() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/asr/supported-languages'));
+      final response = await http.get(Uri.parse('$_baseUrl/stt/supported-languages'));
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

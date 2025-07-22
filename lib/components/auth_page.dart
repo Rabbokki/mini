@@ -32,10 +32,10 @@ class _AuthPageState extends State<AuthPage> {
     setState(() { errorMessage = ''; });
     try {
       print('로그인 시도: $email');
-      print('API URL: http://192.168.0.12:8000/auth/login');
+      print('API URL: http://192.168.0.12:8001/auth/login');
       
       final response = await http.post(
-        Uri.parse('http://localhost:8000/api/auth/login'),
+        Uri.parse('http://192.168.43.129:8001/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
@@ -79,7 +79,7 @@ class _AuthPageState extends State<AuthPage> {
     setState(() { errorMessage = ''; });
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:8000/api/auth/register'),
+        Uri.parse('http://192.168.43.129:8001/api/auth/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': name,
@@ -115,25 +115,31 @@ class _AuthPageState extends State<AuthPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background, // bg-background
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0), // p-4
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 448), // max-w-md
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+      body: SingleChildScrollView(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0), // p-4
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 448), // max-w-md
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                 // Logo/Title
                 Column(
                   children: [
-                    Text(
-                      '하루그램',
-                      style: TextStyle(
-                        fontSize: 30.0, // text-3xl
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.foreground,
-                      ),
-                      textAlign: TextAlign.center,
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Background Logo (옅게 표시)
+                        Opacity(
+                          opacity: 0.5,
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 280, // 원래 크기로 복원
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8), // mb-2
                     Text(
@@ -145,11 +151,11 @@ class _AuthPageState extends State<AuthPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 32), // mb-8
+                const SizedBox(height: 16), // mb-4 (간격 줄임)
 
                 // Auth Form Card
                 Container(
-                  padding: const EdgeInsets.all(32.0), // p-8
+                  padding: const EdgeInsets.all(24.0), // p-6 (패딩 줄임)
                   decoration: BoxDecoration(
                     color: AppColors.calendarBg, // bg-calendar-bg
                     border: Border.all(color: AppColors.border), // border-border
@@ -217,7 +223,7 @@ class _AuthPageState extends State<AuthPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24), // space-y-6
+                      const SizedBox(height: 16), // space-y-4 (간격 줄임)
 
                       // Form
                       Form(
@@ -265,7 +271,7 @@ class _AuthPageState extends State<AuthPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16), // space-y-4
+                              const SizedBox(height: 12), // space-y-3 (간격 줄임)
                             ],
 
                             // Birthday field for signup
@@ -328,7 +334,7 @@ class _AuthPageState extends State<AuthPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 12),
 
                             ],
 
@@ -373,7 +379,7 @@ class _AuthPageState extends State<AuthPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
 
                             // Password field
                             Column(
@@ -425,7 +431,7 @@ class _AuthPageState extends State<AuthPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
 
                             // Confirm Password field for signup
                             if (!isLogin) ...[
@@ -482,7 +488,7 @@ class _AuthPageState extends State<AuthPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 12),
                             ],
 
                             // Submit Button
@@ -520,7 +526,7 @@ class _AuthPageState extends State<AuthPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24), // mt-6
+                const SizedBox(height: 16), // mt-4 (간격 줄임)
 
                 // Footer
                 Text(
@@ -534,6 +540,7 @@ class _AuthPageState extends State<AuthPage> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

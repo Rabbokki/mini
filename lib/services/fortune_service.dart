@@ -1,17 +1,29 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FortuneService {
-  static const String baseUrl = 'http://localhost:5000'; // AI 서비스 URL
+  static const String baseUrl = 'http://192.168.43.129:5001'; // AI 서비스 URL
 
   /// OpenAI를 사용해서 개인화된 운세를 생성합니다.
   static Future<String?> generateFortune(String birthday) async {
     try {
+      // 인증 토큰 가져오기
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+      
+      final headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // 토큰이 있으면 Authorization 헤더 추가
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
       final response = await http.get(
         Uri.parse('$baseUrl/fortune?birthday=$birthday'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -19,6 +31,7 @@ class FortuneService {
         return data['fortune'];
       } else {
         print('운세 생성 실패: ${response.statusCode}');
+        print('응답 내용: ${response.body}');
         return null;
       }
     } catch (e) {

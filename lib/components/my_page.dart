@@ -6,7 +6,7 @@ import '../ui/card.dart';
 import '../ui/button.dart';
 import '../services/user_service.dart';
 import '../services/user_settings_service.dart';
-import 'dart:math';
+import 'dart:math' as math;
 
 class MyPage extends StatefulWidget {
   const MyPage({super.key});
@@ -27,17 +27,24 @@ class _MyPageState extends State<MyPage> {
   DateTime? _tempBirthday;
   DateTime _currentCalendarDate = DateTime.now(); // 현재 표시중인 달력의 년/월 상태 추가
   
-  // Emoji categories state
+  // Emoji categories state (Firebase URL로 표시)
   Map<Emotion, List<String>> _emojiCategories = {
-    Emotion.shape: ['⭐', '🔶', '🔷', '⚫', '🔺'],
-    Emotion.fruit: ['🍎', '🍊', '🍌', '🍇', '🍓'],
-    Emotion.animal: ['🐶', '🐱', '🐰', '🐸', '🐼'],
-    Emotion.weather: ['☀️', '🌧️', '⛈️', '🌈', '❄️']
+    Emotion.shape: ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'],
+    Emotion.fruit: ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'],
+    Emotion.animal: ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'],
+    Emotion.weather: ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f']
   };
   
   Emotion _selectedEmotion = Emotion.shape;
 
   final Map<Emotion, String> _emotionLabels = {
+    Emotion.neutral: '기본',
+    Emotion.happy: '행복',
+    Emotion.sad: '슬픔',
+    Emotion.excited: '신남',
+    Emotion.angry: '화남',
+    Emotion.love: '사랑',
+    // 카테고리들
     Emotion.shape: '도형',
     Emotion.fruit: '과일',
     Emotion.animal: '동물',
@@ -45,10 +52,17 @@ class _MyPageState extends State<MyPage> {
   };
 
   final Map<Emotion, int> _emotionScores = {
+    Emotion.neutral: 70,
+    Emotion.happy: 80,
+    Emotion.sad: 85,
+    Emotion.excited: 75,
+    Emotion.angry: 60,
+    Emotion.love: 90,
+    // 카테고리들은 기본 점수 설정
     Emotion.shape: 70,
-    Emotion.fruit: 80,
-    Emotion.animal: 85,
-    Emotion.weather: 75
+    Emotion.fruit: 70,
+    Emotion.animal: 70,
+    Emotion.weather: 70
   };
 
   final List<String> _availableEmojis = [
@@ -62,12 +76,64 @@ class _MyPageState extends State<MyPage> {
     '☀️', '🌤️', '⛅', '🌥️', '🌦️', '🌧️', '⛈️', '🌩️', '🌨️', '❄️', '☃️', '⛄', '🌬️', '💨', '🌪️', '🌫️', '🌈', '☂️', '☔', '⚡', '🌊', '💧', '💦', '🧊'
   ];
 
-  // 카테고리별 사용 가능한 이모티콘 맵 추가
+  // 카테고리별 사용 가능한 Firebase 이미지 URL 맵
   final Map<Emotion, List<String>> _availableEmoticonsByCategory = {
-    Emotion.shape: ['⭐', '🌟', '✨', '⚡', '💥', '🔥', '🌈', '☀️', '🌞', '🌝', '🌛', '🌜', '🌚', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓', '🌔', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '⚫', '⚪', '🟥', '🟧', '🟨', '🟩', '🟦', '🟪', '🟫', '⬛', '⬜', '◼️', '◻️', '◾', '◽', '▪️', '▫️', '🔶', '🔷', '🔸', '🔹', '🔺', '🔻', '💠', '🔘', '🔳', '🔲'],
-    Emotion.fruit: ['🍎', '🍊', '🍋', '🍌', '🍍', '🥭', '🍑', '🍒', '🍓', '🫐', '🥝', '🍅', '🫒', '🥥', '🥑', '🍆', '🥔', '🥕', '🌽', '🌶️', '🫑', '🥒', '🥬', '🥦', '🧄', '🧅', '🍄', '🥜', '🌰', '🍇', '🍈', '🍉'],
-    Emotion.animal: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦗', '🕷️', '🕸️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐈', '🪶', '🐓', '🦃', '🦚', '🦜', '🦢', '🕊️', '🐇', '🦝', '🦨', '🦡', '🦫'],
-    Emotion.weather: ['☀️', '🌤️', '⛅', '🌥️', '🌦️', '🌧️', '⛈️', '🌩️', '🌨️', '❄️', '☃️', '⛄', '🌬️', '💨', '🌪️', '🌫️', '🌈', '☂️', '☔', '⚡', '🌊', '💧', '💦', '🧊'],
+    Emotion.shape: [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fconfident_shape-removebg-preview.png?alt=media&token=8ab02bc8-8569-42ff-b78d-b9527f15d0af',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fdetermined_shape-removebg-preview.png?alt=media&token=69eb4cf0-ab61-4f5e-add3-b2148dc2a108',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fcalm_shape-removebg-preview.png?alt=media&token=cdc2fa85-10b7-46f6-881c-dd874c38b3ea',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Flove_shape-removebg-preview.png?alt=media&token=1a7ec74f-4297-42a4-aeb8-97aee1e9ff6c',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Ftouched_shape-removebg-preview.png?alt=media&token=bbb50a1c-90d6-43fd-be40-4be4f51bc1d0',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fanxious_shape-removebg-preview.png?alt=media&token=7859ebac-cd9d-43a3-a42c-aec651d37e6e',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fconfused_shape-removebg-preview.png?alt=media&token=4794d127-9b61-4c68-86de-8478c4da8fb9'
+    ],
+    Emotion.fruit: [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fhappy_fruit-removebg-preview.png?alt=media&token=d10a503b-fee7-4bc2-b141-fd4b33dae1f1',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fcalm_fruit-removebg-preview.png?alt=media&token=839efcad-0022-4cc9-ac38-90175d9026d2',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Flove_fruit-removebg-preview.png?alt=media&token=ba7857c6-5afd-48e0-addd-7b3f54583c15',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fexcited_fruit-removebg-preview.png?alt=media&token=0284bce2-aa88-4766-97fb-5d5d2248cf31',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fangry_fruit-removebg-preview.png?alt=media&token=679778b9-5a1b-469a-8e86-b01585cb1ee2',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fconfident_fruit-removebg-preview.png?alt=media&token=6edcc903-8d78-4dd9-bcdd-1c6b26645044',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fdetermined_fruit-removebg-preview.png?alt=media&token=ed288879-86c4-4d6d-946e-477f2aafc3ce',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fsad_fruit-removebg-preview.png?alt=media&token=e9e0b0f7-6590-4209-a7d1-26377eb33c05',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Ftouched_fruit-removebg-preview.png?alt=media&token=c69dee6d-7d53-4af7-a884-2f751aecbe42',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fanxious_fruit-removebg-preview.png?alt=media&token=be8f8279-2b08-47bf-9856-c39daf5eac40',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fconfused_fruit-removebg-preview.png?alt=media&token=7adfcf22-af7a-4eb1-a225-34875b6540cf'
+    ],
+    Emotion.animal: [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fhappy_animal-removebg-preview.png?alt=media&token=66ff8e2d-d941-4fd7-9d7f-9766db03cbd5',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fcalm_animal-removebg-preview.png?alt=media&token=afd7bf65-5150-40e3-8b95-cd956dff113d',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Flove_animal-removebg-preview.png?alt=media&token=e0e2ccbd-b59a-4d09-968a-562208f90be1',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fexcited_animal-removebg-preview.png?alt=media&token=48442937-5504-4392-88a9-039aef405f14',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fangry_animal-removebg-preview.png?alt=media&token=9bde31db-8801-4af0-9368-e6ce4a35fbac',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fconfident__animal-removebg-preview.png?alt=media&token=2983b323-a2a6-40aa-9b6c-a381d944dd27',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fdetermined_animal-removebg-preview.png?alt=media&token=abf05981-4ab3-49b3-ba37-096ab8c22478',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fsad_animal-removebg-preview.png?alt=media&token=04c99bd8-8ad4-43de-91cd-3b7354780677',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Ftouched_animal-removebg-preview.png?alt=media&token=629be9ec-be17-407f-beb0-6b67f09b7036',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fanxious_animal-removebg-preview.png?alt=media&token=bd25e31d-629b-4e79-b95e-019f8c76dac2',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fconfused__animal-removebg-preview.png?alt=media&token=74192a1e-86a7-4eb6-b690-154984c427dc'
+    ],
+    Emotion.weather: [
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fhappy_weather-removebg-preview.png?alt=media&token=fd77e998-6f47-459a-bd1c-458e309fed41',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fcalm_weather-removebg-preview.png?alt=media&token=7703fd25-fe2b-4750-a415-5f86c4e7b058',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Flove_weather-removebg-preview.png?alt=media&token=2451105b-ab3e-482d-bf9f-12f0a6a69a53',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fexcited_weather-removebg-preview.png?alt=media&token=5de71f38-1178-4e3c-887e-af07547caba9',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fangry_weather-removebg-preview.png?alt=media&token=2f4c6212-697d-49b7-9d5e-ae1f2b1fa84e',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fconfident_weather-removebg-preview.png?alt=media&token=ea30d002-312b-4ae5-ad85-933bbc009dc6',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fdetermined_weather-removebg-preview.png?alt=media&token=0eb8fb3d-22dd-4b4f-8e12-7d830f32be6d',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fsad_weather-removebg-preview.png?alt=media&token=aa972b9a-8952-4dc7-abe7-692ec7be0d16',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Ftouched_weather-removebg-preview.png?alt=media&token=5e224042-72ae-45a4-891a-8e6abdb5285c',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fanxious_weather-removebg-preview.png?alt=media&token=fc718a17-8d8e-4ed1-a78a-891fa9a149d0',
+      'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fconfused_weather-removebg-preview.png?alt=media&token=afdfb6bf-2c69-4ef2-97a1-2e5aa67e6fdb'
+    ],
   };
 
   @override
@@ -89,6 +155,7 @@ class _MyPageState extends State<MyPage> {
         if (birthdayStr != null && birthdayStr.isNotEmpty) {
           final birthday = UserService.parseBirthday(birthdayStr);
           if (birthday != null) {
+            _tempBirthday = birthday; // 임시 생일 변수에도 설정
             // AppState에도 생일 정보 업데이트
             WidgetsBinding.instance.addPostFrameCallback((_) {
               context.read<AppState>().setUserBirthday(birthday);
@@ -116,19 +183,26 @@ class _MyPageState extends State<MyPage> {
       
       print('서버에서 불러온 설정: $settings'); // 디버깅용
       
+      // emoticon_categories 타입 변환 수정
+      final emoticonCategoriesData = settings['emoticon_categories'] ?? appState.emoticonCategories;
+      print('emoticon_categories 데이터: $emoticonCategoriesData'); // 디버깅용
+      
       setState(() {
         _voiceEnabled = settings['voice_enabled'] ?? appState.voiceEnabled;
         _voiceVolume = (settings['voice_volume'] ?? appState.voiceVolume).toDouble();
         
-        // emoticon_categories 타입 변환 수정
-        final emoticonCategoriesData = settings['emoticon_categories'] ?? appState.emoticonCategories;
+        // 안전한 변환을 위한 null 체크 추가
+        if (emoticonCategoriesData != null) {
         _emojiCategories = Map<Emotion, List<String>>.from(
           emoticonCategoriesData.map((key, value) {
             // List<dynamic>을 List<String>으로 변환
             final List<String> stringList = (value as List).map((item) => item.toString()).toList();
+              print('카테고리 $key의 이모티콘 개수: ${stringList.length}'); // 디버깅용
+              print('카테고리 $key의 첫 번째 이모티콘: ${stringList.isNotEmpty ? stringList[0] : "없음"}'); // 디버깅용
             return MapEntry(Emotion.values.firstWhere((e) => e.name == key), stringList);
           })
         );
+        }
         
         // 마지막 선택된 카테고리 불러오기
         final lastCategory = settings['last_selected_emotion_category'] ?? appState.lastSelectedEmotionCategory;
@@ -139,9 +213,11 @@ class _MyPageState extends State<MyPage> {
           orElse: () => Emotion.shape
         );
         print('설정 후 _selectedEmotion: ${_selectedEmotion.name}'); // 디버깅용
+        print('선택된 카테고리의 이모티콘 개수: ${_emojiCategories[_selectedEmotion]?.length ?? 0}'); // 디버깅용
       });
       
       // AppState도 업데이트 (서버 저장 없이)
+      if (emoticonCategoriesData != null) {
       final emoticonCategoriesForAppState = _emojiCategories.map((key, value) => MapEntry(key.name, value));
       appState.updateSettingsFromServer(
         voiceEnabled: _voiceEnabled,
@@ -149,6 +225,7 @@ class _MyPageState extends State<MyPage> {
         emoticonCategories: emoticonCategoriesForAppState,
         lastSelectedEmotionCategory: _selectedEmotion.name,
       );
+      }
       
       print('AppState 업데이트 완료: ${_selectedEmotion.name}'); // 디버깅용
       
@@ -185,19 +262,15 @@ class _MyPageState extends State<MyPage> {
 
   Future<void> _handleSaveProfile(AppState appState) async {
     try {
-      // 백엔드에 프로필 정보 업데이트
+      // 백엔드에 프로필 정보 업데이트 (이름은 업데이트하지 않음)
       final birthdayStr = _tempBirthday != null 
           ? UserService.formatBirthday(_tempBirthday)
           : null;
       
       await UserService.updateUserProfile(
-        name: _tempName,
+        name: _userName, // 기존 이름 유지
         birthday: _tempBirthday,
       );
-      
-      setState(() {
-        _userName = _tempName;
-      });
       
       if (_tempBirthday != null) {
         appState.setUserBirthday(_tempBirthday!);
@@ -211,7 +284,7 @@ class _MyPageState extends State<MyPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('프로필이 성공적으로 저장되었습니다.'),
+            content: Text('생일이 성공적으로 저장되었습니다.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -221,7 +294,7 @@ class _MyPageState extends State<MyPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('프로필 저장 실패: $e'),
+            content: Text('생일 저장 실패: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -231,27 +304,21 @@ class _MyPageState extends State<MyPage> {
 
   void _handleCancelProfile(AppState appState) {
     setState(() {
-      _tempName = _userName;
       _tempBirthday = appState.userBirthday;
       _isProfileDialogOpen = false;
     });
   }
 
-  void _handleEmojiSelect(String emoji) {
-    setState(() {
-      var currentEmojis = _emojiCategories[_selectedEmotion]!;
-      if (currentEmojis.contains(emoji)) {
-        currentEmojis.remove(emoji);
-      } else if (currentEmojis.length < 5) {
-        currentEmojis.add(emoji);
-      }
-    });
-  }
+  // 이모티콘 개별 선택 기능 제거 - 카테고리만 선택 가능
 
-  void _handleCategorySelect(Emotion emotion) async {
+  void _handleCategorySelect(Emotion emotion, AppState appState) async {
     setState(() {
       _selectedEmotion = emotion;
+      // 선택된 카테고리의 모든 이모티콘을 자동으로 설정
+      _emojiCategories[emotion] = List<String>.from(_availableEmoticonsByCategory[emotion] ?? []);
     });
+    // AppState에 선택된 카테고리 저장
+    appState.setSelectedEmoticonCategory(emotion);
     // AppState에 마지막 선택된 카테고리 저장
     await context.read<AppState>().setLastSelectedEmotionCategory(emotion.name);
   }
@@ -262,10 +329,10 @@ class _MyPageState extends State<MyPage> {
       
       // 기본값으로 설정
       final defaultCategories = {
-        'shape': ['⭐', '🔶', '🔷', '⚫', '🔺'],
-        'fruit': ['🍎', '🍊', '🍌', '🍇', '🍓'],
-        'animal': ['🐶', '🐱', '🐰', '🐸', '🐼'],
-        'weather': ['☀️', '🌧️', '⛈️', '🌈', '❄️']
+        'shape': ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5'],
+        'fruit': ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39'],
+        'animal': ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f'],
+        'weather': ['https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f']
       };
       
       // 서버에 기본값 저장
@@ -304,32 +371,153 @@ class _MyPageState extends State<MyPage> {
     
     final totalDays = currentMonthData.length;
     
+    // 사용자가 선택한 카테고리 가져오기 (현재 선택된 카테고리 우선)
+    final selectedCategory = appState.selectedEmoticonCategory;
+    
     if (totalDays == 0) {
+      // 기본값은 선택된 카테고리의 neutral 이미지
+      String defaultEmojiUrl;
+      switch (selectedCategory) {
+        case Emotion.shape:
+          defaultEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+          break;
+        case Emotion.fruit:
+          defaultEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39';
+          break;
+        case Emotion.animal:
+          defaultEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f';
+          break;
+        case Emotion.weather:
+          defaultEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f';
+          break;
+        default:
+          defaultEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+          break;
+      }
+      
       return {
         'totalDays': 0,
         'happinessIndex': 50,
-        'happinessEmoji': '🐸',
+        'happinessEmoji': defaultEmojiUrl,
         'happinessColor': const Color(0xFFEAB308),
         'gaugeAngle': 90.0
       };
     }
     
     final averageScore = currentMonthData.fold(0, (sum, entry) => 
-        sum + _emotionScores[entry.value.emotion]!) / totalDays;
+        sum + (_emotionScores[entry.value.emotion] ?? 70)) / totalDays;
     
     final happinessIndex = averageScore.round();
     final gaugeAngle = 180 - (happinessIndex / 100) * 180; // 180 to 0 degrees
-    final happinessEmoji = happinessIndex >= 51 ? '🐶' : happinessIndex >= 21 ? '🐸' : '🐱';
+    
+    // 사용자가 선택한 카테고리에 따른 Firebase 이미지 URL 결정
+    String happinessEmojiUrl;
+    if (happinessIndex >= 80) {
+      // 매우 행복한 경우 - excited 이미지
+      switch (selectedCategory) {
+        case Emotion.shape:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96';
+          break;
+        case Emotion.fruit:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fexcited_fruit-removebg-preview.png?alt=media&token=0284bce2-aa88-4766-97fb-5d5d2248cf31';
+          break;
+        case Emotion.animal:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fexcited_animal-removebg-preview.png?alt=media&token=48442937-5504-4392-88a9-039aef405f14';
+          break;
+        case Emotion.weather:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fexcited_weather-removebg-preview.png?alt=media&token=5de71f38-1178-4e3c-887e-af07547caba9';
+          break;
+        default:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96';
+          break;
+      }
+    } else if (happinessIndex >= 60) {
+      // 행복한 경우 - happy 이미지
+      switch (selectedCategory) {
+        case Emotion.shape:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076';
+          break;
+        case Emotion.fruit:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fhappy_fruit-removebg-preview.png?alt=media&token=d10a503b-fee7-4bc2-b141-fd4b33dae1f1';
+          break;
+        case Emotion.animal:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fhappy_animal-removebg-preview.png?alt=media&token=66ff8e2d-d941-4fd7-9d7f-9766db03cbd5';
+          break;
+        case Emotion.weather:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fhappy_weather-removebg-preview.png?alt=media&token=fd77e998-6f47-459a-bd1c-458e309fed41';
+          break;
+        default:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076';
+          break;
+      }
+    } else if (happinessIndex >= 40) {
+      // 보통인 경우 - neutral 이미지
+      switch (selectedCategory) {
+        case Emotion.shape:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+          break;
+        case Emotion.fruit:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39';
+          break;
+        case Emotion.animal:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f';
+          break;
+        case Emotion.weather:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f';
+          break;
+        default:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+          break;
+      }
+    } else if (happinessIndex >= 20) {
+      // 슬픈 경우 - sad 이미지
+      switch (selectedCategory) {
+        case Emotion.shape:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98';
+          break;
+        case Emotion.fruit:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fsad_fruit-removebg-preview.png?alt=media&token=e9e0b0f7-6590-4209-a7d1-26377eb33c05';
+          break;
+        case Emotion.animal:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fsad_animal-removebg-preview.png?alt=media&token=04c99bd8-8ad4-43de-91cd-3b7354780677';
+          break;
+        case Emotion.weather:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fsad_weather-removebg-preview.png?alt=media&token=aa972b9a-8952-4dc7-abe7-692ec7be0d16';
+          break;
+        default:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98';
+          break;
+      }
+    } else {
+      // 매우 슬픈 경우 - angry 이미지
+      switch (selectedCategory) {
+        case Emotion.shape:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa';
+          break;
+        case Emotion.fruit:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fangry_fruit-removebg-preview.png?alt=media&token=679778b9-5a1b-469a-8e86-b01585cb1ee2';
+          break;
+        case Emotion.animal:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fangry_animal-removebg-preview.png?alt=media&token=9bde31db-8801-4af0-9368-e6ce4a35fbac';
+          break;
+        case Emotion.weather:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fangry_weather-removebg-preview.png?alt=media&token=2f4c6212-697d-49b7-9d5e-ae1f2b1fa84e';
+          break;
+        default:
+          happinessEmojiUrl = 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa';
+          break;
+      }
+    }
     
     // 행복 색상 계산 (빨강에서 초록으로)
-    final red = max(0, 255 - (happinessIndex * 2.55));
-    final green = min(255, happinessIndex * 2.55);
+    final red = math.max(0, 255 - (happinessIndex * 2.55));
+    final green = math.min(255, happinessIndex * 2.55);
     final happinessColor = Color.fromARGB(255, red.round(), green.round(), 0);
     
     return {
       'totalDays': totalDays,
       'happinessIndex': happinessIndex,
-      'happinessEmoji': happinessEmoji,
+      'happinessEmoji': happinessEmojiUrl,
       'happinessColor': happinessColor,
       'gaugeAngle': gaugeAngle
     };
@@ -412,7 +600,7 @@ class _MyPageState extends State<MyPage> {
     return false; // 모든 카테고리를 무료로 사용 가능
   }
 
-  Widget _buildEmojiDialog(BuildContext context) {
+    Widget _buildEmojiDialog(BuildContext context, AppState appState) {
     return Dialog(
       backgroundColor: const Color(0xFFF5EFE6),
       shape: RoundedRectangleBorder(
@@ -420,9 +608,9 @@ class _MyPageState extends State<MyPage> {
       ),
       child: Container(
         width: 448,  // 모달 너비 고정
+        height: MediaQuery.of(context).size.height * 0.8, // 화면 높이의 80%로 제한
         padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 상단 헤더
@@ -430,7 +618,7 @@ class _MyPageState extends State<MyPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  '이모티콘 카테고리 설정',
+                  '카테고리 선택',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -448,16 +636,22 @@ class _MyPageState extends State<MyPage> {
             ),
             const SizedBox(height: 20),
             
-            // 카테고리 버튼들
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            // 카테고리 버튼들 - 가로 스크롤
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
               children: [
-                // 도형을 첫 번째로 이동
-                _buildCategoryButton(Emotion.shape),
-                _buildCategoryButton(Emotion.fruit),
-                _buildCategoryButton(Emotion.animal),
-                _buildCategoryButton(Emotion.weather),
-              ],
+                  const SizedBox(width: 8), // 왼쪽 여백
+                  _buildCategoryButton(Emotion.shape, appState),
+                  const SizedBox(width: 8),
+                  _buildCategoryButton(Emotion.fruit, appState),
+                  const SizedBox(width: 8),
+                  _buildCategoryButton(Emotion.animal, appState),
+                  const SizedBox(width: 8),
+                  _buildCategoryButton(Emotion.weather, appState),
+                  const SizedBox(width: 8), // 오른쪽 여백
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -465,36 +659,78 @@ class _MyPageState extends State<MyPage> {
             Row(
               children: [
                 Text(
-                  '${_emotionLabels[_selectedEmotion]} 카테고리 (5개)',
+                  '${_emotionLabels[_selectedEmotion]} 카테고리 (${_availableEmoticonsByCategory[_selectedEmotion]?.length ?? 0}개)',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                
               ],
             ),
             const SizedBox(height: 16),
 
-            // 선택된 이모지들
-            Container(
+            // 선택된 Firebase 이미지들
+            Expanded(
+              child: Container(
               padding: const EdgeInsets.all(12),
+                child: SingleChildScrollView(
               child: Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  for (var emoji in _emojiCategories[_selectedEmotion]!)
-                    Text(
-                      emoji,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        color: Colors.black,
+                      for (var imageUrl in _availableEmoticonsByCategory[_selectedEmotion] ?? [])
+                        Container(
+                          width: 56,
+                          height: 56,
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: AppColors.muted,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              print('다이얼로그 이미지 로딩 실패: $error');
+                              return Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: AppColors.muted,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.error,
+                                  size: 24,
+                                  color: Colors.grey,
+                                ),
+                              );
+                            },
                       ),
                     ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
 
             // 하단 버튼들
             Row(
@@ -597,9 +833,11 @@ class _MyPageState extends State<MyPage> {
   }
 
   // 카테고리 버튼 위젯
-  Widget _buildCategoryButton(Emotion emotion) {
-    return TextButton(
-      onPressed: () => _handleCategorySelect(emotion),
+  Widget _buildCategoryButton(Emotion emotion, AppState appState) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 80), // 최소 너비 설정
+      child: TextButton(
+        onPressed: () => _handleCategorySelect(emotion, appState),
       style: ButtonStyle(
         backgroundColor: MaterialStateProperty.all(
           _selectedEmotion == emotion 
@@ -607,7 +845,7 @@ class _MyPageState extends State<MyPage> {
             : Colors.transparent,
         ),
         padding: MaterialStateProperty.all(
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10), // 패딩 조정
         ),
         shape: MaterialStateProperty.all(
           RoundedRectangleBorder(
@@ -615,17 +853,19 @@ class _MyPageState extends State<MyPage> {
           ),
         ),
       ),
-      child: Row(
+        child: Column( // Row를 Column으로 변경
+          mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             _emotionLabels[emotion]!,
             style: TextStyle(
               color: _selectedEmotion == emotion ? Colors.white : Colors.black,
               fontWeight: FontWeight.w500,
+                fontSize: 13, // 폰트 크기 조정
             ),
           ),
-
         ],
+        ),
       ),
     );
   }
@@ -720,7 +960,6 @@ class _MyPageState extends State<MyPage> {
                                     AppButton(
                                       onPressed: () {
                                         setState(() {
-                                          _tempName = _userName;
                                           _tempBirthday = appState.userBirthday;
                                           _isProfileDialogOpen = true;
                                         });
@@ -734,7 +973,7 @@ class _MyPageState extends State<MyPage> {
                                           borderRadius: BorderRadius.circular(20),
                                           color: AppColors.calendarDateHover,
                                         ),
-                                        child: const Icon(Icons.settings, size: 20),
+                                        child: const Icon(Icons.info_outline, size: 20),
                                       ),
                                     ),
                                   ],
@@ -788,6 +1027,9 @@ class _MyPageState extends State<MyPage> {
                                 Center(
                                   child: Column(
                                     children: [
+                                      Stack(
+                                        alignment: Alignment.center,
+                                    children: [
                                       SizedBox(
                                         width: 200,
                                         height: 120,
@@ -796,9 +1038,65 @@ class _MyPageState extends State<MyPage> {
                                             happinessIndex: happinessData['happinessIndex'],
                                             gaugeAngle: happinessData['gaugeAngle'],
                                             happinessColor: happinessData['happinessColor'],
-                                            happinessEmoji: happinessData['happinessEmoji'],
+                                                happinessEmoji: '', // 이모티콘은 별도로 표시
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                          // 바늘 끝에 이모티콘 표시
+                                          Positioned(
+                                            left: 100 + 60 * math.cos(happinessData['gaugeAngle'] * math.pi / 180) - 12,
+                                            top: 100 - 60 * math.sin(happinessData['gaugeAngle'] * math.pi / 180) - 12,
+                                            child: happinessData['happinessEmoji'].toString().startsWith('http')
+                                                ? Image.network(
+                                                    happinessData['happinessEmoji'],
+                                                    width: 24,
+                                                    height: 24,
+                                                    fit: BoxFit.contain,
+                                                    loadingBuilder: (context, child, loadingProgress) {
+                                                      if (loadingProgress == null) return child;
+                                                      return Container(
+                                                        width: 24,
+                                                        height: 24,
+                                                        decoration: BoxDecoration(
+                                                          color: AppColors.muted,
+                                                          borderRadius: BorderRadius.circular(12),
+                                                        ),
+                                                        child: const Center(
+                                                          child: SizedBox(
+                                                            width: 16,
+                                                            height: 16,
+                                                            child: CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    errorBuilder: (context, error, stackTrace) {
+                                                      print('이미지 로딩 실패: $error');
+                                                      return Container(
+                                                        width: 24,
+                                                        height: 24,
+                                                        decoration: BoxDecoration(
+                                                          color: AppColors.muted,
+                                                          borderRadius: BorderRadius.circular(12),
+                                                        ),
+                                                        child: const Center(
+                                                          child: Text(
+                                                            '😊',
+                                                            style: TextStyle(fontSize: 16),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  )
+                                                : Text(
+                                                    happinessData['happinessEmoji'],
+                                                    style: const TextStyle(fontSize: 24),
+                                                  ),
+                                          ),
+                                        ],
                                       ),
                                       const SizedBox(height: 16),
                                       Column(
@@ -1007,14 +1305,85 @@ class _MyPageState extends State<MyPage> {
                                             ),
                                             Row(
                                               children: [
-                                                ...(_emojiCategories[_selectedEmotion]!.take(3).map((emoji) => 
-                                                  Text(emoji, style: const TextStyle(fontSize: 12)))),
-                                                if (_emojiCategories[_selectedEmotion]!.length > 3)
-                                                  Text(
-                                                    '+${_emojiCategories[_selectedEmotion]!.length - 3}',
+                                                ...((_emojiCategories[_selectedEmotion] ?? []).take(3).map((emoji) => 
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(right: 4),
+                                                    child: Container(
+                                                      width: 20,
+                                                      height: 20,
+                                                      decoration: BoxDecoration(
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(
+                                                          color: AppColors.border,
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(3),
+                                                        child: emoji.startsWith('http')
+                                                            ? Image.network(
+                                                                emoji,
+                                                                width: 18,
+                                                                height: 18,
+                                                                fit: BoxFit.contain,
+                                                                loadingBuilder: (context, child, loadingProgress) {
+                                                                  if (loadingProgress == null) return child;
+                                                                  return Container(
+                                                                    width: 18,
+                                                                    height: 18,
+                                                                    decoration: BoxDecoration(
+                                                                      color: AppColors.muted,
+                                                                      borderRadius: BorderRadius.circular(3),
+                                                                    ),
+                                                                    child: const Center(
+                                                                      child: SizedBox(
+                                                                        width: 12,
+                                                                        height: 12,
+                                                                        child: CircularProgressIndicator(
+                                                                          strokeWidth: 1,
+                                                                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                                errorBuilder: (context, error, stackTrace) {
+                                                                  print('미리보기 이미지 로딩 실패: $error');
+                                                                  return Container(
+                                                                    width: 18,
+                                                                    height: 18,
+                                                                    decoration: BoxDecoration(
+                                                                      color: AppColors.muted,
+                                                                      borderRadius: BorderRadius.circular(3),
+                                                                    ),
+                                                                    child: const Center(
+                                                                      child: Text(
+                                                                        '😊',
+                                                                        style: TextStyle(fontSize: 12),
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              )
+                                                            : Text(emoji, style: const TextStyle(fontSize: 14)),
+                                                      ),
+                                                    ),
+                                                  )
+                                                )),
+                                                if ((_emojiCategories[_selectedEmotion] ?? []).length > 3)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.muted.withOpacity(0.2),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Text(
+                                                    '+${(_emojiCategories[_selectedEmotion] ?? []).length - 3}',
                                                     style: TextStyle(
-                                                      fontSize: 12,
+                                                        fontSize: 10,
                                                       color: AppColors.mutedForeground,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
                                                     ),
                                                   ),
                                               ],
@@ -1093,7 +1462,7 @@ class _MyPageState extends State<MyPage> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text(
-                                    '프로필 설정',
+                                '프로필 정보',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w600,
@@ -1108,7 +1477,7 @@ class _MyPageState extends State<MyPage> {
                                 ],
                               ),
                               const SizedBox(height: 24),
-                              // 이름 입력
+                              // 이름 표시 (수정 불가)
                               const Text(
                                 '이름',
                                 style: TextStyle(
@@ -1117,31 +1486,26 @@ class _MyPageState extends State<MyPage> {
                                     ),
                                   ),
                               const SizedBox(height: 8),
-                              TextField(
-                                controller: TextEditingController(),  // 초기값 제거
-                                onChanged: (value) => _tempName = value,
-                                decoration: InputDecoration(
-                                  hintText: '이름을 입력하세요.',
-                                  contentPadding: const EdgeInsets.symmetric(
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
                                     vertical: 16,
                                   ),
-                                  border: OutlineInputBorder(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(color: AppColors.border),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(color: AppColors.border),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(color: AppColors.border),
+                                  color: AppColors.muted.withOpacity(0.1),
+                                ),
+                                child: Text(
+                                  _userName,
+                                  style: TextStyle(
+                                    color: AppColors.mutedForeground,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              // 생일 선택
+                              // 생일 표시 (수정 불가)
                               const Text(
                                 '생일',
                                 style: TextStyle(
@@ -1150,15 +1514,7 @@ class _MyPageState extends State<MyPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              // 날짜 표시 박스
-                              InkWell(
-                                key: _birthdayInputKey, // 위치 추적을 위한 키 추가
-                                onTap: () {
-                                  setState(() {
-                                    _isCalendarVisible = !_isCalendarVisible;
-                                  });
-                                },
-                                child: Container(
+                              Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -1167,6 +1523,7 @@ class _MyPageState extends State<MyPage> {
                                   decoration: BoxDecoration(
                                     border: Border.all(color: AppColors.border),
                                     borderRadius: BorderRadius.circular(8),
+                                  color: AppColors.muted.withOpacity(0.1),
                                   ),
                                   child: Row(
                                     children: [
@@ -1175,34 +1532,27 @@ class _MyPageState extends State<MyPage> {
                                       Text(
                                         _tempBirthday != null 
                                           ? '${_tempBirthday!.year}년 ${_tempBirthday!.month}월 ${_tempBirthday!.day}일'
-                                          : '생일을 선택하세요.',
+                                        : '생일 미설정',
                                         style: TextStyle(
-                                          color: _tempBirthday == null
-                                              ? AppColors.mutedForeground
-                                              : AppColors.foreground,
+                                        color: AppColors.mutedForeground,
                             ),
                           ),
                         ],
-                      ),
                                 ),
                               ),
                               const SizedBox(height: 24),
-                              // 버튼
+                              // 닫기 버튼만 표시
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
                                   AppButton(
-                                    onPressed: () => _handleCancelProfile(appState),
-                                    variant: ButtonVariant.ghost,
-                                    child: const Text('취소'),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  AppButton(
-                                    onPressed: () => _handleSaveProfile(appState),
+                                    onPressed: () => setState(() {
+                                      _isProfileDialogOpen = false;
+                                    }),
                                     variant: ButtonVariant.primary,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                                      child: const Text('저장'),
+                                      child: const Text('닫기'),
                     ),
                   ),
                 ],
@@ -1214,144 +1564,10 @@ class _MyPageState extends State<MyPage> {
                     ),
                   ),
                 ),
-              // 달력 팝오버
-              if (_isCalendarVisible && _isProfileDialogOpen)
-                Positioned(
-                  top: _getCalendarTopPosition(),
-                  left: _getCalendarLeftPosition(),
-                  child: Material(
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      width: 320,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 월 선택 헤더
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left),
-                                onPressed: () {
-                                  setState(() {
-                                    _currentCalendarDate = DateTime(
-                                      _currentCalendarDate.year,
-                                      _currentCalendarDate.month - 1,
-                                    );
-                                  });
-      },
-                              ),
-                              Text(
-                                '${_currentCalendarDate.year}년 ${_currentCalendarDate.month}월',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right),
-                                onPressed: () {
-                                  setState(() {
-                                    _currentCalendarDate = DateTime(
-                                      _currentCalendarDate.year,
-                                      _currentCalendarDate.month + 1,
-                                    );
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          // 요일 헤더
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: const [
-                              Text('일', style: TextStyle(fontSize: 12, color: Colors.red)),
-                              Text('월', style: TextStyle(fontSize: 12)),
-                              Text('화', style: TextStyle(fontSize: 12)),
-                              Text('수', style: TextStyle(fontSize: 12)),
-                              Text('목', style: TextStyle(fontSize: 12)),
-                              Text('금', style: TextStyle(fontSize: 12)),
-                              Text('토', style: TextStyle(fontSize: 12, color: Colors.blue)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // 날짜 그리드
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 7,
-                              childAspectRatio: 1,
-                              mainAxisSpacing: 4,
-                              crossAxisSpacing: 4,
-                            ),
-                            itemCount: 42,
-                            itemBuilder: (context, index) {
-                              final days = _getCalendarDays(_currentCalendarDate.year, _currentCalendarDate.month);
-                              final day = days[index];
-                              final isSelected = _tempBirthday != null &&
-                                  day.date.year == _tempBirthday!.year &&
-                                  day.date.month == _tempBirthday!.month &&
-                                  day.date.day == _tempBirthday!.day;
-                              final isWeekend = day.date.weekday == DateTime.saturday || 
-                                              day.date.weekday == DateTime.sunday;
-                              
-                              return TextButton(
-                                onPressed: () {
-                                  if (day.isCurrentMonth) {
-                                    setState(() {
-                                      _tempBirthday = day.date;
-                                    });
-                                  } else {
-                                    setState(() {
-                                      _currentCalendarDate = DateTime(day.date.year, day.date.month, 1);
-                                    });
-                                  }
-                                },
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  backgroundColor: isSelected 
-                                    ? AppColors.primary.withOpacity(0.1)
-                                    : day.isCurrentMonth ? null : AppColors.muted.withOpacity(0.1),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '${day.date.day}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      color: !day.isCurrentMonth 
-                                        ? AppColors.mutedForeground.withOpacity(0.5)
-                                        : isSelected
-                                          ? AppColors.primary
-                                          : isWeekend
-                                            ? day.date.weekday == DateTime.sunday ? Colors.red : Colors.blue
-                                            : AppColors.foreground,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+
               // 이모티콘 설정 모달
               if (_isEmojiDialogOpen)
-                _buildEmojiDialog(context),
+                _buildEmojiDialog(context, appState),
             ],
           ),
         );
@@ -1395,45 +1611,7 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
-  // 이모티콘 아이템 위젯
-  Widget _buildEmojiItem(String emoji) {
-    final isSelected = _emojiCategories[_selectedEmotion]!.contains(emoji);
-    
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (isSelected) {
-            _emojiCategories[_selectedEmotion]!.remove(emoji);
-          } else {
-            if (_emojiCategories[_selectedEmotion]!.length < 5) { // 최대 5개까지만 선택 가능
-              _emojiCategories[_selectedEmotion]!.add(emoji);
-            }
-          }
-        });
-      },
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: isSelected 
-            ? AppColors.primary.withOpacity(0.1) 
-            : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected 
-              ? AppColors.primary 
-              : Colors.transparent,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            emoji,
-            style: const TextStyle(fontSize: 20),
-          ),
-        ),
-      ),
-    );
-  }
+  
 }
 
 // 행복 지수 게이지를 그리는 CustomPainter
@@ -1473,17 +1651,17 @@ class HappinessGaugePainter extends CustomPainter {
     
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      pi, // Start from left (180 degrees)
-      pi, // Draw half circle (180 degrees)
+      math.pi, // Start from left (180 degrees)
+      math.pi, // Draw half circle (180 degrees)
       false,
       paint..color = paint.color.withOpacity(0.6),
     );
     
     // Draw needle
-    final needleAngle = gaugeAngle * pi / 180;
+    final needleAngle = gaugeAngle * math.pi / 180;
     final needleEnd = Offset(
-      center.dx + 60 * cos(needleAngle),
-      center.dy - 60 * sin(needleAngle),
+      center.dx + 60 * math.cos(needleAngle),
+      center.dy - 60 * math.sin(needleAngle),
     );
     
     final needlePaint = Paint()
@@ -1517,22 +1695,7 @@ class HappinessGaugePainter extends CustomPainter {
     happyPainter.layout();
     happyPainter.paint(canvas, Offset(size.width - 40, size.height - 10));
     
-    // Draw emoji on needle tip
-    final emojiPainter = TextPainter(
-      text: TextSpan(
-        text: happinessEmoji,
-        style: const TextStyle(fontSize: 20),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    emojiPainter.layout();
-    emojiPainter.paint(
-      canvas,
-      Offset(
-        center.dx + 70 * cos(needleAngle) - emojiPainter.width / 2,
-        center.dy - 70 * sin(needleAngle) - emojiPainter.height / 2,
-      ),
-    );
+    // 이모티콘은 별도로 표시하므로 여기서는 그리지 않음
   }
 
   @override

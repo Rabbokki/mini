@@ -8,6 +8,7 @@ from post.database.mongodb import init_mongodb
 import os
 # from routes.asr import router as asr_router  # ASR 라우터 제거
 from routes.images import router as images_router
+import logging
 
 app = FastAPI(
     title="AI Mini Implementation - 통합 API",
@@ -72,31 +73,66 @@ async def root():
 async def asr_recognize(file: UploadFile = File(..., alias="audio"), language: str = Form("ko")):
     """음성-텍스트 변환"""
     try:
-        import httpx
+        from transformers import pipeline
+        import tempfile
+        import os
         import logging
         
         # 로깅 설정
+        logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger(__name__)
-        logger.info(f"ASR 요청 받음: 파일명={file.filename}, 크기={file.size if hasattr(file, 'size') else 'unknown'}")
         
-        # STT 서비스로 파일 전송
-        async with httpx.AsyncClient() as client:
-            file_content = await file.read()
-            logger.info(f"파일 내용 읽음: {len(file_content)} bytes")
+        logger.info(f"ASR 요청 받음: 파일명={file.filename}, 언어={language}")
+        
+        # Whisper 모델 로드 (최초 1회만)
+        logger.info("Whisper 모델 로딩 시작...")
+        asr_pipeline = pipeline("automatic-speech-recognition", model="openai/whisper-medium")
+        logger.info("Whisper 모델 로딩 완료")
+        
+        # 파일 확장자 확인 (filename이 None일 수 있음)
+        file_extension = ".m4a"  # 기본값
+        if file.filename:
+            file_extension = os.path.splitext(file.filename)[1].lower()
+            if file_extension not in ['.wav', '.m4a', '.mp3', '.flac']:
+                file_extension = ".m4a"  # 기본값으로 설정
+        
+        logger.info(f"파일 확장자: {file_extension}")
+        
+        # 임시 파일로 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        logger.info(f"임시 파일 생성: {tmp_path}, 크기: {len(content)} bytes")
+        
+        try:
+            # 음성 인식
+            logger.info("음성 인식 시작...")
+            result = asr_pipeline(tmp_path)
+            text = result["text"] if isinstance(result, dict) else result
+            logger.info(f"음성 인식 완료: {text}")
             
-            files = {"audio": (file.filename or "audio.m4a", file_content, file.content_type or "audio/m4a")}
-            logger.info(f"STT 서비스로 전송: http://localhost:5002/stt/transcribe")
+            # 임시 파일 삭제
+            os.unlink(tmp_path)
+            logger.info("임시 파일 삭제 완료")
             
-            response = await client.post("http://localhost:5002/stt/transcribe", files=files)
-            logger.info(f"STT 서비스 응답: 상태코드={response.status_code}")
+            return {
+                "success": True,
+                "text": text,
+                "language": "ko",
+                "duration": 0.0,
+                "segments": [],
+                "timestamp": ""
+            }
+        except Exception as e:
+            logger.error(f"음성 인식 중 오류: {str(e)}", exc_info=True)
+            # 임시 파일 삭제
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+                logger.info("오류 발생 시 임시 파일 정리 완료")
+            raise e
             
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"STT 성공: 텍스트 길이={len(result.get('text', ''))}")
-                return result
-            else:
-                logger.error(f"STT 서비스 오류: {response.status_code} - {response.text}")
-                raise HTTPException(status_code=response.status_code, detail=f"STT 서비스 오류: {response.text}")
     except Exception as e:
         logger.error(f"ASR 처리 오류: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"ASR 처리 오류: {str(e)}")
@@ -135,7 +171,7 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 
 

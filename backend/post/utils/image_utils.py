@@ -54,7 +54,7 @@ def validate_image_file(file: UploadFile) -> None:
             detail=f"지원하지 않는 파일 형식입니다. 지원 형식: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-async def save_temp_image(file: UploadFile) -> Tuple[str, int]:
+async def save_temp_image(file: UploadFile) -> str:
     """임시 이미지 파일 저장"""
     # 디렉토리 확인
     ensure_directories()
@@ -97,7 +97,7 @@ async def save_temp_image(file: UploadFile) -> Tuple[str, int]:
         else:
             raise HTTPException(status_code=500, detail=f"파일 저장 중 오류가 발생했습니다: {str(e)}")
     
-    return unique_filename, file_size
+    return unique_filename
 
 def move_temp_to_permanent(temp_filename: str) -> str:
     """임시 파일을 영구 저장소로 이동"""
@@ -109,7 +109,7 @@ def move_temp_to_permanent(temp_filename: str) -> str:
     
     try:
         shutil.move(temp_path, permanent_path)
-        return permanent_path
+        return temp_filename  # 파일명만 반환
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 이동 중 오류: {str(e)}")
 
@@ -243,12 +243,18 @@ class ImageUtils:
             else:
                 raise HTTPException(status_code=500, detail=f"파일 저장 중 오류가 발생했습니다: {str(e)}")
         
-        return unique_filename
+        return unique_filename, file_size
     
     def move_temp_to_permanent(self, temp_filename: str, post_id: str = None) -> str:
         """임시 파일을 영구 저장소로 이동"""
         temp_path = os.path.join(TEMP_DIR, temp_filename)
         permanent_path = os.path.join(IMAGES_DIR, temp_filename)
+        
+        print(f"DEBUG: move_temp_to_permanent - temp_filename: {temp_filename}")
+        print(f"DEBUG: move_temp_to_permanent - temp_path: {temp_path}")
+        print(f"DEBUG: move_temp_to_permanent - permanent_path: {permanent_path}")
+        print(f"DEBUG: move_temp_to_permanent - temp_path exists: {os.path.exists(temp_path)}")
+        print(f"DEBUG: move_temp_to_permanent - permanent_path exists: {os.path.exists(permanent_path)}")
         
         if not os.path.exists(temp_path):
             raise HTTPException(status_code=404, detail="임시 파일을 찾을 수 없습니다")

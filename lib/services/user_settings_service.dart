@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserSettingsService {
-  static const String baseUrl = 'http://localhost:8000/api';
+  static const String baseUrl = 'http://192.168.43.129:8001/api';
   
   // 사용자 설정 모델
   static Map<String, dynamic> defaultSettings = {
