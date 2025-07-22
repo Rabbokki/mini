@@ -6,6 +6,7 @@ import '../ui/card.dart';
 import '../ui/button.dart';
 import 'dart:math';
 import '../services/fortune_service.dart'; // Added import for FortuneService
+import '../services/user_service.dart'; // Added import for UserService
 
 class DiaryCalendar extends StatefulWidget {
   final Function(String)? onDateSelect;
@@ -31,40 +32,19 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
   late DateTime currentDate;
   late Map<String, EmotionData> emotionData;
 
-  // 사용자가 선택한 카테고리의 이모지만 사용
-  String _getEmotionEmoji(Emotion emotion, AppState appState) {
-    final selectedCategory = appState.selectedEmoticonCategory;
-    
-    // 사용자가 선택한 카테고리와 다른 감정인 경우, 선택된 카테고리의 기본 이모지 사용
-    if (emotion != selectedCategory) {
-      switch (selectedCategory) {
-        case Emotion.fruit:
-          return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39';
-        case Emotion.animal:
-          return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f';
-        case Emotion.shape:
-          return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
-        case Emotion.weather:
-          return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f';
-      }
-    }
-    
-    // 선택된 카테고리와 같은 감정인 경우 원래 이모지 사용
-    final Map<Emotion, String> emotionEmojis = {
-      Emotion.fruit: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39',
-      Emotion.animal: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f',
-      Emotion.shape: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5',
-      Emotion.weather: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f',
-    };
-    
-    return emotionEmojis[emotion] ?? emotionEmojis[Emotion.shape]!;
-  }
-
   final Map<Emotion, Color> emotionColors = {
-    Emotion.fruit: const Color(0xFFEA580C), // orange-500
-    Emotion.animal: const Color(0xFF22C55E), // green-500
-    Emotion.shape: const Color(0xFF3B82F6), // blue-500
-    Emotion.weather: const Color(0xFFEAB308), // yellow-500
+    Emotion.angry: const Color(0xFFDC2626), // red-600
+    Emotion.anxious: const Color(0xFF7C3AED), // violet-600
+    Emotion.calm: const Color(0xFF059669), // emerald-600
+    Emotion.confident: const Color(0xFF2563EB), // blue-600
+    Emotion.confused: const Color(0xFF7C2D12), // orange-800
+    Emotion.determined: const Color(0xFFDC2626), // red-600
+    Emotion.excited: const Color(0xFFEA580C), // orange-500
+    Emotion.happy: const Color(0xFF22C55E), // green-500
+    Emotion.love: const Color(0xFFEC4899), // pink-500
+    Emotion.neutral: const Color(0xFF6B7280), // gray-500
+    Emotion.sad: const Color(0xFF3B82F6), // blue-500
+    Emotion.touched: const Color(0xFF8B5CF6), // violet-500
   };
 
   final List<String> monthNames = [
@@ -84,9 +64,43 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
     final appState = Provider.of<AppState>(context, listen: false);
     emotionData = appState.emotionData;
     
-    // 생년월일이 설정되어 있으면 운세 로드
-    if (widget.userBirthday != null) {
-      _loadTodaysFortune(widget.userBirthday!);
+    // AppState에서 사용자 생년월일을 가져와서 운세 로드
+    final userBirthday = appState.userBirthday;
+    if (userBirthday != null) {
+      _loadTodaysFortune(userBirthday);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // 백엔드에서 최신 사용자 생년월일을 가져와서 운세 업데이트
+    _loadUserBirthdayAndFortune();
+  }
+
+  Future<void> _loadUserBirthdayAndFortune() async {
+    try {
+      // UserService를 통해 백엔드에서 사용자 프로필 정보 가져오기
+      final userData = await UserService.getUserProfile();
+      if (userData != null && userData['birthday'] != null) {
+        final birthdayStr = userData['birthday'];
+        if (birthdayStr.isNotEmpty) {
+          final birthday = UserService.parseBirthday(birthdayStr);
+          if (birthday != null) {
+            // AppState에 생년월일 업데이트
+            final appState = Provider.of<AppState>(context, listen: false);
+            appState.setUserBirthday(birthday);
+            
+            // 운세 로드
+            if (_currentFortune.isEmpty || _currentFortune == '') {
+              _loadTodaysFortune(birthday);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('사용자 생년월일 로드 실패: $e');
     }
   }
 
@@ -189,6 +203,77 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
     }
   }
 
+  // 감정+카테고리별 이모티콘 URL 반환 함수 추가
+  String getCategoryEmoji(Emotion emotion, Emotion selectedCategory) {
+    switch (emotion) {
+      case Emotion.excited:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fexcited_fruit-removebg-preview.png?alt=media&token=0284bce2-aa88-4766-97fb-5d5d2248cf31';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fexcited_animal-removebg-preview.png?alt=media&token=48442937-5504-4392-88a9-039aef405f14';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fexcited_weather-removebg-preview.png?alt=media&token=5de71f38-1178-4e3c-887e-af07547caba9';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96';
+        }
+      case Emotion.happy:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fhappy_fruit-removebg-preview.png?alt=media&token=d10a503b-fee7-4bc2-b141-fd4b33dae1f1';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fhappy_animal-removebg-preview.png?alt=media&token=66ff8e2d-d941-4fd7-9d7f-9766db03cbd5';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fhappy_weather-removebg-preview.png?alt=media&token=fd77e998-6f47-459a-bd1c-458e309fed41';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076';
+        }
+      case Emotion.sad:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fsad_fruit-removebg-preview.png?alt=media&token=e9e0b0f7-6590-4209-a7d1-26377eb33c05';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fsad_animal-removebg-preview.png?alt=media&token=04c99bd8-8ad4-43de-91cd-3b7354780677';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fsad_weather-removebg-preview.png?alt=media&token=aa972b9a-8952-4dc7-abe7-692ec7be0d16';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98';
+        }
+      case Emotion.angry:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fangry_fruit-removebg-preview.png?alt=media&token=679778b9-5a1b-469a-8e86-b01585cb1ee2';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fangry_animal-removebg-preview.png?alt=media&token=9bde31db-8801-4af0-9368-e6ce4a35fbac';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fangry_weather-removebg-preview.png?alt=media&token=2f4c6212-697d-49b7-9d5e-ae1f2b1fa84e';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa';
+        }
+      case Emotion.neutral:
+      default:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+        }
+    }
+  }
 
   List<Widget> _renderCalendarDays() {
     final year = currentDate.year;
@@ -276,22 +361,17 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
                               child: Center(
                                 child: Transform.translate(
                                   offset: const Offset(0, -20),
-                                  child: Consumer<AppState>(
-                                    builder: (context, appState, child) {
-                                      return Image.network(
-                                        _getEmotionEmoji(dayData.emotion, appState),
-                                        width: 24,
-                                        height: 24,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return const Text(
-                                            '😊',
-                                            style: TextStyle(fontSize: 12),
-                                          );
-                                        },
+                                  child: Image.network(
+                                    getCategoryEmoji(dayData.emotion, Provider.of<AppState>(context).selectedEmoticonCategory),
+                                    width: 24,
+                                    height: 24,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Text(
+                                        '😊',
+                                        style: TextStyle(fontSize: 12),
                                       );
                                     },
-
                                   ),
                                 ),
                               ),
@@ -312,9 +392,20 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
   }
 
   Widget _renderFortuneSection() {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: UserService.getUserProfile(),
+      builder: (context, snapshot) {
+        DateTime? userBirthday;
+        
+        if (snapshot.hasData && snapshot.data != null) {
+          final birthdayStr = snapshot.data!['birthday'];
+          if (birthdayStr != null && birthdayStr.isNotEmpty) {
+            userBirthday = UserService.parseBirthday(birthdayStr);
+          }
+        }
 
-    // 생년월일이 설정되지 않은 경우 마이페이지로 이동하는 카드 표시
-    if (widget.userBirthday == null) {
+        // 생년월일이 설정되지 않은 경우 마이페이지로 이동하는 카드 표시
+        if (userBirthday == null) {
       return AppCard(
         backgroundColor: AppColors.calendarBg,
         borderRadius: BorderRadius.circular(24),
@@ -478,7 +569,7 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
                   ],
                 )
               : Text(
-                  _currentFortune.isNotEmpty ? _currentFortune : FortuneService.getDefaultFortune(widget.userBirthday!),
+                  _currentFortune.isNotEmpty ? _currentFortune : FortuneService.getDefaultFortune(userBirthday!),
                   style: TextStyle(
                     fontSize: 14,
                     color: AppColors.foreground,
@@ -489,6 +580,8 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 

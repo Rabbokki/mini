@@ -20,6 +20,7 @@ class PostCreate(BaseModel):
     """일기 작성 시 사용하는 모델"""
     content: str
     status: PostStatus = PostStatus.PUBLISHED
+    emotion: Optional[str] = "neutral"  # 감정 정보 추가
     images: Optional[List[str]] = []  # 임시 업로드된 이미지 파일명 리스트
     
     @validator('content')
@@ -61,6 +62,8 @@ class PostListResponse(BaseModel):
     id: str
     content: str
     status: PostStatus
+    emotion: Optional[str] = "neutral"  # 감정 정보 추가
+    emoji: Optional[str] = "⭐"  # 이모지 URL 추가
     created_at: datetime
     images: List[ImageInfo] = []  # 이미지 정보 목록
     

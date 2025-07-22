@@ -9,7 +9,16 @@ import '../ui/card.dart';
 import '../ui/button.dart';
 import 'dart:math';
 import '../services/diary_service.dart';
+import '../services/stt_service.dart';
+import '../services/openai_service.dart';
+import '../services/tts_service.dart';
+import '../services/audio_recorder.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'dart:io';
+import 'dart:async';
+import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:app_settings/app_settings.dart';
 
 typedef SaveDiaryCallback = void Function(String entry, Emotion emotion, List<String>? images);
 
@@ -44,16 +53,24 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   bool _isSaved = false;
   String _aiMessage = '';
   String _currentEmoji = '';
-  List<String> _uploadedImages = [];
+  List<Map<String, dynamic>> _uploadedImages = [];
   bool _isRecording = false;
   int _recordingTime = 0;
   String _recognizedText = '';
   bool _hasText = false;
+  bool _isTranscribing = false; // STT 변환 중 상태
+  String _partialText = ''; // 부분 인식 텍스트
+  String _status = ''; // 녹음 상태 메시지
+  bool _isEditMode = false; // 수정 모드 여부
 
   late AnimationController _fadeAnimationController;
   late Animation<double> _fadeAnimation;
 
   final _diaryService = DiaryService();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final ImagePicker _imagePicker = ImagePicker();
+  Timer? _recordingTimer;
+  Timer? _statusTimer;
 
   final List<EmotionChainItem> emotionChain = [
     EmotionChainItem(emoji: '🍎', type: Emotion.fruit),
@@ -64,11 +81,12 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     EmotionChainItem(emoji: '🐱', type: Emotion.animal),
   ];
 
+  // 감정에 따른 이모티콘 매핑 (Firebase URL)
   final Map<Emotion, String> emotionEmojis = {
-    Emotion.fruit: '🍎',
-    Emotion.animal: '🐶',
-    Emotion.shape: '⭐',
-    Emotion.weather: '☀️',
+    Emotion.fruit: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39',
+    Emotion.animal: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f',
+    Emotion.shape: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5',
+    Emotion.weather: 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f',
   };
 
   String? _ttsAudioUrl;
@@ -76,6 +94,121 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   bool _isTtsLoading = false;
   bool _isMuted = false;
   bool _isTtsPlaying = false;
+
+  // 감정+카테고리별 이모티콘 URL 반환 함수 추가
+  String getCategoryEmoji(Emotion emotion, Emotion selectedCategory) {
+    switch (emotion) {
+      case Emotion.excited:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/fruit%2Fexcited_fruit-removebg-preview.png?alt=media&token=0284bce2-aa88-4766-97fb-5d5d2248cf31';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/animal%2Fexcited_animal-removebg-preview.png?alt=media&token=48442937-5504-4392-88a9-039aef405f14';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/wheather%2Fexcited_weather-removebg-preview.png?alt=media&token=5de71f38-1178-4e3c-887e-af07547caba9';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96';
+        }
+      case Emotion.happy:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/fruit%2Fhappy_fruit-removebg-preview.png?alt=media&token=d10a503b-fee7-4bc2-b141-fd4b33dae1f1';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/animal%2Fhappy_animal-removebg-preview.png?alt=media&token=66ff8e2d-d941-4fd7-9d7f-9766db03cbd5';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/wheather%2Fhappy_weather-removebg-preview.png?alt=media&token=fd77e998-6f47-459a-bd1c-458e309fed41';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076';
+        }
+      case Emotion.sad:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/fruit%2Fsad_fruit-removebg-preview.png?alt=media&token=e9e0b0f7-6590-4209-a7d1-26377eb33c05';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/animal%2Fsad_animal-removebg-preview.png?alt=media&token=04c99bd8-8ad4-43de-91cd-3b7354780677';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/wheather%2Fsad_weather-removebg-preview.png?alt=media&token=aa972b9a-8952-4dc7-abe7-692ec7be0d16';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98';
+        }
+      case Emotion.angry:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/fruit%2Fangry_fruit-removebg-preview.png?alt=media&token=679778b9-5a1b-469a-8e86-b01585cb1ee2';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/animal%2Fangry_animal-removebg-preview.png?alt=media&token=9bde31db-8801-4af0-9368-e6ce4a35fbac';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/wheather%2Fangry_weather-removebg-preview.png?alt=media&token=2f4c6212-697d-49b7-9d5e-ae1f2b1fa84e';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa';
+        }
+      case Emotion.neutral:
+      default:
+        switch (selectedCategory) {
+          case Emotion.shape:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+          case Emotion.fruit:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/fruit%2Fneutral_fruit-removebg-preview.png?alt=media&token=9bdea06c-13e6-4c59-b961-1424422a3c39';
+          case Emotion.animal:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/animal%2Fneutral_animal-removebg-preview.png?alt=media&token=f884e38d-5d8c-4d4a-bb62-a47a198d384f';
+          case Emotion.weather:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/wheather%2Fneutral_weather-removebg-preview.png?alt=media&token=57ad1adf-baa6-4b79-96f5-066a4ec3358f';
+          default:
+            return 'https://firebasestorage.googleapis.com/v0/b/diary-3bbf7/firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5';
+        }
+    }
+  }
+
+  // 사용자 설정 카테고리에서 이모지 가져오기
+  String _getUserEmoticon(Emotion emotion) {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final selectedCategory = appState.selectedEmoticonCategory;
+    
+    // 사용자가 선택한 카테고리와 다른 감정인 경우, 선택된 카테고리의 기본 이모지 사용
+    if (emotion != selectedCategory) {
+      switch (selectedCategory) {
+        case Emotion.fruit:
+          return emotionEmojis[Emotion.fruit]!;
+        case Emotion.animal:
+          return emotionEmojis[Emotion.animal]!;
+        case Emotion.shape:
+          return emotionEmojis[Emotion.shape]!;
+        case Emotion.weather:
+          return emotionEmojis[Emotion.weather]!;
+        default:
+          return emotionEmojis[Emotion.shape]!;
+      }
+    }
+    
+    // 선택된 카테고리와 같은 감정인 경우 원래 이모지 사용
+    return emotionEmojis[emotion] ?? emotionEmojis[Emotion.shape]!;
+  }
+
+  /// STT 서비스 연결 테스트
+  Future<void> _testSTTConnection() async {
+    try {
+      print('STT 서비스 연결 테스트 시작...');
+      final health = await STTService.healthCheck();
+      print('STT 서비스 연결 성공: $health');
+    } catch (e) {
+      print('STT 서비스 연결 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('STT 서비스에 연결할 수 없습니다: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -86,6 +219,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     _currentEmoji = widget.existingEntry?.emoji ?? '';
     _uploadedImages = List.from(widget.existingEntry?.images ?? []);
     _hasText = _entryController.text.trim().isNotEmpty;
+    _isEditMode = !_isSaved; // 새 일기는 true, 저장된 일기는 false
 
     _fadeAnimationController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -99,6 +233,19 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     if (widget.existingEntry?.entry != null && _aiMessage.isEmpty) {
       _fetchAIMessage(widget.existingEntry!.entry!);
     }
+
+    // STT 서비스 연결 테스트
+    _testSTTConnection();
+
+    // 위젯이 빌드된 후 AppState를 사용하여 기본 이모티콘 설정
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _currentEmoji.isEmpty) {
+        final appState = Provider.of<AppState>(context, listen: false);
+        setState(() {
+          _currentEmoji = _getUserEmoticon(Emotion.neutral);
+        });
+      }
+    });
   }
 
   Future<void> _loadDiaryData() async {
@@ -109,13 +256,33 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
 
     try {
       final diaryData = await _diaryService.getDiaryByDate(widget.selectedDate);
+      print('==== [DEBUG] diaryData 전체:');
+      print(diaryData);
       if (diaryData != null) {
+        print('==== [DEBUG] diaryData["images"]:');
+        print(diaryData['images']);
+        print('==== [DEBUG] diaryData["images"] 타입:');
+        print(diaryData['images']?.runtimeType);
         setState(() {
           _entryController.text = diaryData['content'] ?? '';
-          _uploadedImages = List<String>.from(diaryData['images'] ?? []);
+          _uploadedImages = (diaryData['images'] as List?)?.map((e) {
+            print('==== [DEBUG] images 요소 타입:');
+            print(e.runtimeType);
+            print('==== [DEBUG] images 요소 값:');
+            print(e);
+            if (e is String) {
+              // file_path에서 filename만 추출
+              final filename = e.split('/').last;
+              return {"filename": filename, "url": 'http://192.168.43.129:8001/api/images/$filename', "isNew": false}; // 기존 이미지
+            } else if (e is Map<String, dynamic>) {
+              return {"filename": e["filename"] ?? '', "url": 'http://192.168.43.129:8001/api/images/${e["filename"] ?? ''}', "isNew": false}; // 기존 이미지
+            } else {
+              return {"filename": '', "url": '', "isNew": false};
+            }
+          }).toList() ?? [];
           _isSaved = true;
           _hasText = _entryController.text.trim().isNotEmpty;
-          _currentEmoji = diaryData['emoji'] ?? emotionEmojis[Emotion.fruit]!;
+          _currentEmoji = diaryData['emoji'] ?? _getUserEmoticon(Emotion.neutral);
         });
         await _fetchAIMessage(diaryData['content']);
       }
@@ -145,22 +312,13 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
 
     try {
       print('Fetching AI message for text: $text');
-      final response = await http.post(
-        Uri.parse('http://127.0.0.1:8001/api/analyze-diary'),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: jsonEncode({
-          'date': widget.selectedDate,
-          'text': text,
-        }),
-      );
-
-      print('AI response status: ${response.statusCode}');
-      print('AI response body: ${utf8.decode(response.bodyBytes)}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
+      
+      // OpenAI 서비스 사용
+      final aiMessage = await OpenAIService.analyzeDiary(widget.selectedDate, text);
+      
+      if (aiMessage != null) {
         setState(() {
-          _aiMessage = data['message'] ?? '';
+          _aiMessage = aiMessage;
           _fadeAnimationController.forward();
         });
         // 오늘의 한마디가 갱신되면 자동으로 TTS 재생
@@ -168,7 +326,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
           await _playTTS();
         }
       } else {
-        throw Exception('AI 메시지 요청 실패: ${utf8.decode(response.bodyBytes)}');
+        throw Exception('AI 메시지를 받지 못했습니다.');
       }
     } catch (e) {
       print('AI 메시지 요청 중 오류: $e');
@@ -183,6 +341,9 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   void dispose() {
     _entryController.dispose();
     _fadeAnimationController.dispose();
+    _recordingTimer?.cancel();
+    _statusTimer?.cancel();
+    _audioRecorder.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -191,88 +352,245 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     return true;
   }
 
-  Emotion _analyzeEmotion(String text) {
-    final fruitWords = ['과일', '사과', '바나나', '딸기', '포도', '맛있', '달콤', '상큼'];
-    final animalWords = ['동물', '강아지', '고양이', '새', '토끼', '귀여', '애완동물', '반려동물'];
-    final shapeWords = ['모양', '원', '사각형', '삼각형', '별', '도형', '그림', '디자인'];
-    final weatherWords = ['날씨', '맑은', '비', '눈', '구름', '햇빛', '바람', '기온'];
-
-    final lowerText = text.toLowerCase();
-
-    if (fruitWords.any((word) => lowerText.contains(word))) return Emotion.fruit;
-    if (animalWords.any((word) => lowerText.contains(word))) return Emotion.animal;
-    if (shapeWords.any((word) => lowerText.contains(word))) return Emotion.shape;
-    if (weatherWords.any((word) => lowerText.contains(word))) return Emotion.weather;
-
-    return Emotion.fruit;
-  }
-
-  Future<void> _handleSave() async {
-    if (_entryController.text.trim().isEmpty) {
-      return;
-    }
-
-    final appState = Provider.of<AppState>(context, listen: false);
-    if (!appState.isAuthenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('일기를 저장하려면 로그인이 필요합니다'),
-          backgroundColor: Colors.orange,
-          action: SnackBarAction(
-            label: '로그인',
-            onPressed: () {
-              appState.setAuthenticated(false);
-            },
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isAnalyzing = true;
-    });
-
-    try {
-      final emotion = _analyzeEmotion(_entryController.text);
-
-      await _diaryService.createDiary(
-        content: _entryController.text,
-        emotion: emotion,
-        images: _uploadedImages.isNotEmpty ? _uploadedImages : null,
-      );
-
-      await _fetchAIMessage(_entryController.text);
-
+  // STT: 녹음 시작/중지 및 변환
+  Future<void> _startRecording() async {
+    setState(() { _status = '마이크 권한 확인 중...'; });
+    final success = await _audioRecorder.startRecording();
+    if (success) {
       setState(() {
-        _currentEmoji = emotionEmojis[emotion]!;
-        _isAnalyzing = false;
-        _isSaved = true;
+        _isRecording = true;
+        _recordingTime = 0;
+        _partialText = '';
+        _status = '마이크 녹음 중...';
       });
-
-      widget.onSave(_entryController.text, emotion, _uploadedImages.isNotEmpty ? _uploadedImages : null);
-
-      if (mounted) {
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_isRecording) {
+          setState(() { _recordingTime++; });
+        }
+      });
+    }
+  }
+  Future<void> _stopRecording() async {
+    setState(() { _status = '마이크 녹음 중지 중...'; });
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    final audioPath = await _audioRecorder.stopRecording();
+    setState(() {
+      _isRecording = false;
+      _recordingTime = 0;
+      _status = '음성 인식(STT) 변환 중...';
+    });
+    if (audioPath != null) {
+      await _transcribeAudio(File(audioPath));
+    }
+  }
+  Future<void> _transcribeAudio(File audioFile) async {
+    setState(() { _isTranscribing = true; });
+    try {
+      final result = await STTService.transcribeAudio(audioFile);
+      if (result.success && result.text.isNotEmpty) {
+        setState(() {
+          _recognizedText = result.text;
+          if (_entryController.text.isNotEmpty) {
+            _entryController.text += ' ' + result.text;
+          } else {
+            _entryController.text = result.text;
+          }
+          _hasText = _entryController.text.trim().isNotEmpty;
+          _partialText = '';
+          _status = '음성 인식 완료!';
+        });
+        _clearStatusAfterDelay();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('일기가 저장되었습니다'),
-            backgroundColor: AppColors.primary,
-          ),
+          SnackBar(content: Text('실제 마이크 음성이 텍스트로 변환되었습니다')),
+        );
+      } else {
+        setState(() { _status = '음성 인식 실패'; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('실제 마이크 음성을 인식할 수 없습니다. 다시 시도해주세요.')),
         );
       }
     } catch (e) {
+      setState(() { _status = '음성 변환 오류'; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('실제 마이크 음성 변환에 실패했습니다: ${e.toString()}')),
+      );
+    } finally {
+      setState(() { _isTranscribing = false; });
+    }
+  }
+  void _clearStatusAfterDelay() {
+    _statusTimer?.cancel();
+    _statusTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
+        setState(() { _status = ''; });
+      }
+    });
+  }
+  void _handleRecordingToggle() {
+    if (!_isEditMode) return;
+    if (_isRecording) {
+      _stopRecording();
+    } else {
+      _startRecording();
+    }
+  }
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  // TTS: AI 메시지 음성 재생
+  Future<String?> fetchTTS(String text) async {
+    try {
+      final audioUrl = await TTSService.textToSpeech(text);
+      return audioUrl;
+    } catch (e) {
+      print('TTS 요청 중 오류: $e');
+      return null;
+    }
+  }
+  Future<void> _playTTS() async {
+    if (_aiMessage.isEmpty) return;
+    setState(() { _isTtsLoading = true; });
+    final url = await fetchTTS(_aiMessage);
+    setState(() { _isTtsLoading = false; });
+    if (url != null) {
+      setState(() {
+        _ttsAudioUrl = url;
+        _isTtsPlaying = true;
+        _isMuted = false;
+      });
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.play(UrlSource(url));
+      _audioPlayer.onPlayerComplete.listen((event) {
+        setState(() { _isTtsPlaying = false; });
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('TTS 음성 생성에 실패했습니다.')),
+      );
+    }
+  }
+  Future<void> _toggleMute() async {
+    if (_isTtsLoading) return;
+    if (!_isTtsPlaying) {
+      await _playTTS();
+    } else {
+      if (_isMuted) {
+        await _audioPlayer.setVolume(1.0);
+      } else {
+        await _audioPlayer.setVolume(0.0);
+      }
+      setState(() { _isMuted = !_isMuted; });
+    }
+  }
+
+  // OpenAI: 일기 저장 시 AI 메시지 생성
+  Future<void> _handleSave() async {
+    if (_entryController.text.trim().isEmpty) return;
+    setState(() { _isAnalyzing = true; });
+    try {
+      final emotion = Emotion.shape;
+      // 새로 추가된 이미지만 필터링 (기존 이미지는 제외)
+      final newImages = _uploadedImages
+          .where((img) => img['isNew'] == true) // 새로 추가된 이미지만
+          .map((img) => img["filename"] ?? '')
+          .whereType<String>()
+          .toList();
+      
+      if (_isSaved && _isEditMode && widget.existingEntry != null) {
+        // 수정 모드: updateDiary 호출
+        // id 필드명 유연하게 추출
+        final dynamic entry = widget.existingEntry;
+        String? postId;
+        if (entry != null) {
+          if (entry is Map && entry['id'] != null) {
+            postId = entry['id'] as String;
+          } else if (entry is Map && entry['postId'] != null) {
+            postId = entry['postId'] as String;
+          } else if (entry is Map && entry['post_id'] != null) {
+            postId = entry['post_id'] as String;
+          } else if (entry is dynamic && entry.id != null) {
+            postId = entry.id as String;
+          } else if (entry is dynamic && entry.postId != null) {
+            postId = entry.postId as String;
+          } else if (entry is dynamic && entry.post_id != null) {
+            postId = entry.post_id as String;
+          }
+        }
+        if (postId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('일기 ID를 찾을 수 없습니다.')),
+          );
+          setState(() { _isAnalyzing = false; });
+          return;
+        }
+        final success = await DiaryService().updateDiary(
+          postId: postId,
+          content: _entryController.text,
+          emotion: emotion,
+          images: newImages.isNotEmpty ? newImages : null,
+        );
+        if (success) {
+          await _fetchAIMessage(_entryController.text);
+          setState(() {
+            _isAnalyzing = false;
+            _isSaved = true;
+            _isEditMode = false;
+            // 새로 추가된 이미지들을 기존 이미지로 변경
+            _uploadedImages = _uploadedImages.map((img) {
+              if (img['isNew'] == true) {
+                return {...img, 'isNew': false};
+              }
+              return img;
+            }).toList();
+          });
+          widget.onSave(_entryController.text, emotion, null);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: const Text('일기가 수정되었습니다')),
+            );
+          }
+        } else {
+          setState(() { _isAnalyzing = false; });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('일기 수정에 실패했습니다')),
+          );
+        }
+      } else {
+        // 새 일기: createDiary 호출
+        await DiaryService().createDiary(
+          content: _entryController.text,
+          emotion: emotion,
+          images: newImages.isNotEmpty ? newImages : null,
+        );
+        await _fetchAIMessage(_entryController.text);
         setState(() {
           _isAnalyzing = false;
+          _isSaved = true;
+          _isEditMode = false;
+          // 새로 추가된 이미지들을 기존 이미지로 변경
+          _uploadedImages = _uploadedImages.map((img) {
+            if (img['isNew'] == true) {
+              return {...img, 'isNew': false};
+            }
+            return img;
+          }).toList();
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('일기 저장에 실패했습니다: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        widget.onSave(_entryController.text, emotion, null);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: const Text('일기가 저장되었습니다')),
+          );
+        }
       }
+    } catch (e) {
+      setState(() { _isAnalyzing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('일기 저장/수정에 실패했습니다: ${e.toString()}')),
+      );
     }
   }
 
@@ -286,7 +604,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
     return '${month}월 ${day}일\n$dayName';
   }
 
-  Widget _buildImageWidget(String imagePath) {
+  Widget _buildImageWidget(String imageUrl) {
     Widget errorWidget = Container(
       color: AppColors.muted,
       child: Icon(
@@ -295,63 +613,124 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
       ),
     );
 
+    print('_buildImageWidget 호출: $imageUrl');
     return Image.network(
-      imagePath,
+      imageUrl,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) => errorWidget,
     );
   }
 
   Future<void> _handleImageUpload() async {
-    if (_uploadedImages.length >= 3) return;
-
-    if (kIsWeb) {
+    if (!_isEditMode) return;
+    if (_uploadedImages.length >= 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이미지 업로드 기능은 모바일에서만 사용 가능합니다.')),
+        const SnackBar(
+          content: Text('이미지는 최대 3개까지만 업로드할 수 있습니다'),
+          backgroundColor: Colors.orange,
+        ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이미지 업로드 기능을 구현하려면 image_picker 패키지를 추가하세요.')),
-      );
+      return;
     }
-  }
 
-  void _handleImageDelete(int index) {
-    setState(() {
-      _uploadedImages.removeAt(index);
-    });
-  }
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
 
-  Future<void> _startRecording() async {
-    setState(() {
-      _isRecording = true;
-      _recordingTime = 0;
-    });
-
-    while (_isRecording) {
-      await Future.delayed(const Duration(seconds: 1));
-      if (_isRecording) {
+      if (image != null) {
         setState(() {
-          _recordingTime++;
+          _isAnalyzing = true;
         });
+
+        // 이미지 업로드
+        final filename = await _diaryService.uploadImage(File(image.path));
+        final url = 'http://192.168.43.129:8001/api/images/$filename';
+        setState(() {
+          _uploadedImages.add({"filename": filename, "url": url, "isNew": true}); // 새 이미지 표시
+          // 항상 map 변환 강제
+          _uploadedImages = _uploadedImages.map((e) {
+            if (e is String) {
+              return {"filename": e, "url": 'http://192.168.43.129:8001/api/images/$e', "isNew": true};
+            } else if (e is Map<String, dynamic>) {
+              return {"filename": e["filename"] ?? '', "url": 'http://192.168.43.129:8001/api/images/${e["filename"] ?? ''}', "isNew": e["isNew"] ?? false};
+            } else {
+              return {"filename": '', "url": '', "isNew": false};
+            }
+          }).toList();
+          _isAnalyzing = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('이미지가 업로드되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
+    } catch (e) {
+      setState(() {
+        _isAnalyzing = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('이미지 업로드에 실패했습니다: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  void _stopRecording() {
-    setState(() {
-      _isRecording = false;
-      _recordingTime = 0;
-    });
-  }
-
-  void _handleRecordingToggle() {
-    if (_isRecording) {
-      _stopRecording();
-    } else {
-      _startRecording();
+  Future<void> _handleImageDelete(int index) async {
+    if (!_isEditMode) return; // 수정모드가 아닐 때는 삭제 불가
+    try {
+      final filename = _uploadedImages[index]["filename"] ?? '';
+      
+      final success = await _diaryService.deleteImage(filename);
+      
+      if (success) {
+        setState(() {
+          _uploadedImages.removeAt(index);
+          _uploadedImages = _uploadedImages.map((e) {
+            if (e is String) {
+              return {"filename": e, "url": 'http://192.168.43.129:8001/api/images/$e', "isNew": true};
+            } else if (e is Map<String, dynamic>) {
+              return {"filename": e["filename"] ?? '', "url": 'http://192.168.43.129:8001/api/images/${e["filename"] ?? ''}', "isNew": e["isNew"] ?? false};
+            } else {
+              return {"filename": '', "url": '', "isNew": false};
+            }
+          }).toList();
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('이미지가 삭제되었습니다'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('이미지 삭제에 실패했습니다'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('이미지 삭제 중 오류가 발생했습니다: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
+
+
 
   Widget _buildNotebookLines() {
     return Positioned.fill(
@@ -383,65 +762,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         ),
       ),
     );
-  }
-
-  Future<String?> fetchTTS(String text) async {
-    try {
-      final response = await http.get(
-        Uri.parse('http://127.0.0.1:5050/tts?text=${Uri.encodeComponent(text)}'),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        return 'http://127.0.0.1:5050${data['audio_url']}';
-      } else {
-        print('TTS 요청 실패: \\${response.body}');
-        return null;
-      }
-    } catch (e) {
-      print('TTS 요청 중 오류: \\${e}');
-      return null;
-    }
-  }
-
-  Future<void> _playTTS() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    if (_aiMessage.isEmpty || !appState.voiceEnabled) return;
-    setState(() { _isTtsLoading = true; });
-    final url = await fetchTTS(_aiMessage);
-    setState(() { _isTtsLoading = false; });
-    if (url != null) {
-      setState(() {
-        _ttsAudioUrl = url;
-        _isTtsPlaying = true;
-        _isMuted = false;
-      });
-      await _audioPlayer.setVolume(appState.voiceVolume / 100.0);
-      await _audioPlayer.play(UrlSource(url));
-      _audioPlayer.onPlayerComplete.listen((event) {
-        setState(() { _isTtsPlaying = false; });
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('TTS 음성 생성에 실패했습니다.')),
-      );
-    }
-  }
-
-  Future<void> _toggleMute() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    if (_isTtsLoading || !appState.voiceEnabled) return;
-    if (!_isTtsPlaying) {
-      // 재생 시작
-      await _playTTS();
-    } else {
-      // 음소거/해제
-      if (_isMuted) {
-        await _audioPlayer.setVolume(appState.voiceVolume / 100.0);
-      } else {
-        await _audioPlayer.setVolume(0.0);
-      }
-      setState(() { _isMuted = !_isMuted; });
-    }
   }
 
   // 오늘의 한마디가 갱신될 때 자동으로 TTS 재생
@@ -487,53 +807,51 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 448),
-                        child: AppCard(
-                          backgroundColor: AppColors.calendarBg,
-                          borderRadius: BorderRadius.circular(24),
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.lock_outline,
-                                size: 64,
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 448),
+                      child: AppCard(
+                        backgroundColor: AppColors.calendarBg,
+                        borderRadius: BorderRadius.circular(24),
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.lock_outline,
+                              size: 64,
+                              color: AppColors.mutedForeground,
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              '로그인이 필요합니다',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.foreground,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '일기를 작성하고 저장하려면\n로그인해주세요',
+                              style: TextStyle(
+                                fontSize: 16,
                                 color: AppColors.mutedForeground,
+                                height: 1.5,
                               ),
-                              const SizedBox(height: 24),
-                              Text(
-                                '로그인이 필요합니다',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.foreground,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                '일기를 작성하고 저장하려면\n로그인해주세요',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: AppColors.mutedForeground,
-                                  height: 1.5,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 32),
-                              AppButton(
-                                onPressed: () {
-                                  appState.setAuthenticated(false);
-                                },
-                                variant: ButtonVariant.primary,
-                                size: ButtonSize.large,
-                                child: const Text('로그인하기'),
-                              ),
-                            ],
-                          ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 32),
+                            AppButton(
+                              onPressed: () {
+                                appState.setAuthenticated(false);
+                              },
+                              variant: ButtonVariant.primary,
+                              size: ButtonSize.large,
+                              child: const Text('로그인하기'),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -548,39 +866,41 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 896),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16, top: 20),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppButton(
-                      onPressed: widget.onBack,
-                      variant: ButtonVariant.ghost,
-                      size: ButtonSize.icon,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          color: AppColors.calendarDateHover,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 896),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16, top: 20),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppButton(
+                        onPressed: widget.onBack,
+                        variant: ButtonVariant.ghost,
+                        size: ButtonSize.icon,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.calendarDateHover,
+                          ),
+                          child: const Icon(Icons.arrow_back, size: 20),
                         ),
-                        child: const Icon(Icons.arrow_back, size: 20),
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Center(
+                  Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
                         maxWidth: 448,
-                        maxHeight: 800,
                       ),
                       child: AppCard(
                         backgroundColor: AppColors.calendarBg,
@@ -589,6 +909,36 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // 수정모드 토글 버튼 + 상태 표시
+                            if (_isSaved) // 저장된 일기에만 수정모드 토글 버튼 표시
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _isEditMode ? '수정모드 ON' : '수정모드 OFF',
+                                  style: TextStyle(
+                                    color: _isEditMode ? Colors.green : Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                AppButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isEditMode = !_isEditMode;
+                                    });
+                                  },
+                                  variant: ButtonVariant.ghost,
+                                  size: ButtonSize.small,
+                                  child: Icon(
+                                    _isEditMode ? Icons.toggle_on : Icons.toggle_off,
+                                    color: _isEditMode ? Colors.green : Colors.grey,
+                                    size: 32,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -603,10 +953,23 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                           borderRadius: BorderRadius.circular(24),
                                         ),
                                         child: Center(
-                                          child: Text(
-                                            _currentEmoji,
-                                            style: const TextStyle(fontSize: 24),
-                                          ),
+                                          child: _currentEmoji.startsWith('http')
+                                              ? Image.network(
+                                                  _currentEmoji,
+                                                  width: 24,
+                                                  height: 24,
+                                                  fit: BoxFit.contain,
+                                                  errorBuilder: (context, error, stackTrace) {
+                                                    return const Text(
+                                                      '😊',
+                                                      style: TextStyle(fontSize: 24),
+                                                    );
+                                                  },
+                                                )
+                                              : Text(
+                                                  _currentEmoji,
+                                                  style: const TextStyle(fontSize: 24),
+                                                ),
                                         ),
                                       ),
                                     if (_isSaved || widget.existingEntry?.entry != null)
@@ -654,7 +1017,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                       ),
                                     ],
                                     AppButton(
-                                      onPressed: _handleRecordingToggle,
+                                      onPressed: _isEditMode ? _handleRecordingToggle : null,
                                       variant: ButtonVariant.ghost,
                                       size: ButtonSize.icon,
                                       child: Container(
@@ -682,7 +1045,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                     const SizedBox(width: 8),
                                     if (_uploadedImages.length < 3)
                                       AppButton(
-                                        onPressed: _handleImageUpload,
+                                        onPressed: _isEditMode ? _handleImageUpload : null,
                                         variant: ButtonVariant.ghost,
                                         size: ButtonSize.icon,
                                         child: Container(
@@ -720,6 +1083,17 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                 ),
                                 itemCount: _uploadedImages.length,
                                 itemBuilder: (context, index) {
+                                  final img = _uploadedImages[index];
+                                  String imgUrl = '';
+                                  if (img is Map<String, dynamic>) {
+                                    imgUrl = 'http://192.168.43.129:8001/api/images/${img["filename"] ?? ''}';
+                                  } else if (img is String) {
+                                    imgUrl = 'http://192.168.43.129:8001/api/images/$img';
+                                  } else {
+                                    print('itemBuilder: img 타입 이상, Container 반환');
+                                    return Container(); // 타입 에러 방지
+                                  }
+                                  print('itemBuilder imgUrl: $imgUrl');
                                   return ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
                                     child: Stack(
@@ -731,7 +1105,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                             color: AppColors.muted,
                                             borderRadius: BorderRadius.circular(12),
                                           ),
-                                          child: _buildImageWidget(_uploadedImages[index]),
+                                          child: _buildImageWidget(imgUrl),
                                         ),
                                         Positioned(
                                           top: 4,
@@ -760,7 +1134,8 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                               ),
                               const SizedBox(height: 16),
                             ],
-                            Expanded(
+                            SizedBox(
+                              height: 300, // 원하는 높이로 조정
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: AppColors.calendarBg,
@@ -773,9 +1148,10 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                         padding: const EdgeInsets.all(16),
                                         child: TextField(
                                           controller: _entryController,
-                                          maxLines: null,
-                                          expands: true,
+                                          maxLines: 10,
+                                          expands: false,
                                           textAlignVertical: TextAlignVertical.top,
+                                          enabled: _isEditMode, // 수정모드에서만 입력 가능
                                           style: TextStyle(
                                             color: AppColors.foreground,
                                             height: 2.0,
@@ -810,7 +1186,126 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            if (!_isSaved)
+                            
+                            // 녹음 상태 표시 (저장 전만 노출)
+                            if (!_isSaved && (_isRecording || _isTranscribing || _status.isNotEmpty)) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.calendarBg,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppColors.calendarDateHover),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (_isRecording) ...[
+                                      Row(
+                                        children: [
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '녹음 중... ${_formatDuration(_recordingTime)}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.red[700],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (_isTranscribing) ...[
+                                      if (_isRecording) const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[700]!),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '음성 변환 중...',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.blue[700],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (_status.isNotEmpty) ...[
+                                      if (_isRecording || _isTranscribing) const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _status,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.orange[700],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            
+                            // 수정모드가 아닐 때만 '수정하기' 버튼 노출
+                            if (_isSaved && !_isEditMode)
+                              SizedBox(
+                                width: double.infinity,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _isEditMode = true;
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        child: Center(
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.edit, size: 16, color: AppColors.primaryForeground),
+                                              const SizedBox(width: 8),
+                                              Text('수정하기', style: TextStyle(color: AppColors.primaryForeground, fontWeight: FontWeight.w500)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            // 수정모드일 때만 저장 버튼 노출
+                            if (!_isSaved || _isEditMode)
                               SizedBox(
                                 width: double.infinity,
                                 child: Container(
@@ -844,7 +1339,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Text(
-                                                      '감정 분석 중...',
+                                                      _isSaved ? '일기 수정 중...' : '감정 분석 중...',
                                                       style: TextStyle(
                                                         color: AppColors.primaryForeground,
                                                         fontWeight: FontWeight.w500,
@@ -864,9 +1359,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Text(
-                                                      widget.existingEntry?.entry != null
-                                                          ? '일기 수정하기'
-                                                          : '일기 저장하기',
+                                                      _isSaved ? '일기 수정하기' : '일기 저장하기',
                                                       style: TextStyle(
                                                         color: _hasText && !_isAnalyzing
                                                             ? AppColors.primaryForeground
@@ -975,10 +1468,11 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+        ),
         ),
       ),
     );

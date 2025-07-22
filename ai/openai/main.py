@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+import re
 
 logging.basicConfig(level=logging.INFO, encoding='utf-8')
 logger = logging.getLogger(__name__)
@@ -65,6 +66,16 @@ async def analyze_diary(entry: DiaryEntry):
         comfort_message = response.choices[0].message.content.strip()
         logger.info(f"Received response: {comfort_message.encode('utf-8').decode('utf-8')}")
 
+    # 커서가 보내준 코드
+        # 두 번째 마침표까지의 텍스트만 반환, 그 뒤는 무조건 잘라서 반환
+        periods = [m.end() for m in re.finditer(r'\.', comfort_message)]
+        if len(periods) >= 2:
+            comfort_message = comfort_message[:periods[1]]
+        elif len(periods) == 1:
+            comfort_message = comfort_message[:periods[0]]
+        # 마침표가 없으면 전체 반환
+        # 여기까지
+
         return ComfortResponse(message=comfort_message)
 
     except Exception as e:
@@ -74,3 +85,7 @@ async def analyze_diary(entry: DiaryEntry):
 @app.get("/health")
 async def health_check():
     return {"status": "API가 실행 중입니다"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8002)

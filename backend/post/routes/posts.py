@@ -11,8 +11,7 @@ from post.models.post import (
     ImageUploadResponse, ImageDeleteResponse, ImageInfo
 )
 from post.database.mongodb import get_mongodb
-from post.utils.image_utils import image_utils
-from post.utils.image_utils import image_utils
+from post.utils.image_utils import image_utils, move_temp_to_permanent
 from auth_utils import verify_token, get_user_id_from_token
 from database import posts as posts_collection
 
@@ -54,10 +53,17 @@ async def create_post(post_data: PostCreate, current_user_id: int = Depends(get_
         # 이미지 처리
         images_info = []
         if post_data.images:
+            print(f"DEBUG: 일기 저장 - 이미지 목록: {post_data.images}")
             for temp_filename in post_data.images:
                 try:
+                    print(f"DEBUG: 임시 파일 처리 시작: {temp_filename}")
+                    # 임시 파일 존재 확인
+                    temp_path = os.path.join("uploads/temp", temp_filename)
+                    print(f"DEBUG: 임시 파일 경로: {temp_path}")
+                    print(f"DEBUG: 임시 파일 존재: {os.path.exists(temp_path)}")
+                    
                     # 임시 파일을 정식 업로드 폴더로 이동
-                    permanent_filename = image_utils.move_temp_to_permanent(temp_filename, post_id)
+                    permanent_filename = move_temp_to_permanent(temp_filename)
                     
                     # 이미지 정보 저장
                     file_info = image_utils.get_file_info(permanent_filename)
@@ -74,12 +80,30 @@ async def create_post(post_data: PostCreate, current_user_id: int = Depends(get_
                         image_utils.delete_temp_file(temp_file)
                     raise
         
+        # 감정에 따른 이모지 URL 매핑 (shape 카테고리 기준)
+        emotion_emoji_map = {
+            "angry": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fangry_shape-removebg-preview.png?alt=media&token=92a25f79-4c1d-4b5d-9e5c-2f469e56cefa",
+            "anxious": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fanxious_shape-removebg-preview.png?alt=media&token=7859ebac-cd9d-43a3-a42c-aec651d37e6e",
+            "calm": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fcalm_shape-removebg-preview.png?alt=media&token=cdc2fa85-10b7-46f6-881c-dd874c38b3ea",
+            "confident": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fconfident_shape-removebg-preview.png?alt=media&token=8ab02bc8-8569-42ff-b78d-b9527f15d0af",
+            "confused": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fconfused_shape-removebg-preview.png?alt=media&token=4794d127-9b61-4c68-86de-8478c4da8fb9",
+            "determined": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fdetermined_shape-removebg-preview.png?alt=media&token=69eb4cf0-ab61-4f5e-add3-b2148dc2a108",
+            "excited": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fexcited_shape-removebg-preview.png?alt=media&token=85fadfb8-7006-44d0-a39d-b3fd6070bb96",
+            "happy": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fhappy_shape-removebg-preview.png?alt=media&token=5a8aa9dd-6ea5-4132-95af-385340846076",
+            "love": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Flove_shape-removebg-preview.png?alt=media&token=1a7ec74f-4297-42a4-aeb8-97aee1e9ff6c",
+            "neutral": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5",
+            "sad": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fsad_shape-removebg-preview.png?alt=media&token=acbc7284-1126-4428-a3b2-f8b6e7932b98",
+            "touched": "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Ftouched_shape-removebg-preview.png?alt=media&token=bbb50a1c-90d6-43fd-be40-4be4f51bc1d0",
+        }
+        
         # 일기 데이터 저장 (사용자 ID 추가)
         new_post = {
             "post_id": post_id,
             "user_id": current_user_id,  # 사용자 ID 추가
             "content": post_data.content,
             "status": post_data.status,
+            "emotion": post_data.emotion,  # 감정 정보 추가
+            "emoji": emotion_emoji_map.get(post_data.emotion, emotion_emoji_map["neutral"]),  # 이모지 URL 추가
             "images": images_info,
             "created_at": current_time
         }
@@ -144,6 +168,8 @@ async def get_posts(current_user_id: int = Depends(get_current_user)):
                 id=doc["post_id"],
                 content=doc["content"],
                 status=doc["status"],
+                emotion=doc.get("emotion", "neutral"),
+                emoji=doc.get("emoji", "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5"),
                 created_at=doc["created_at"],
                 images=images
             ))
@@ -325,14 +351,14 @@ async def get_posts_by_date(date: str, current_user_id: int = Depends(get_curren
                 detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식이어야 합니다."
             )
         
-            query = {
-                "user_id": current_user_id,
-                "created_at": {
-                    "$gte": datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S"),
-                    "$lt": datetime.strptime(f"{date} 23:59:59", "%Y-%m-%d %H:%M:%S")
-                },
-                "status": {"$ne": PostStatus.DELETED}
-            }
+        query = {
+            "user_id": current_user_id,
+            "created_at": {
+                "$gte": datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S"),
+                "$lt": datetime.strptime(f"{date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+            },
+            "status": {"$ne": PostStatus.DELETED}
+        }
         
         cursor = collection.find(query).sort("created_at", -1)
         
@@ -393,11 +419,7 @@ async def upload_image(file: UploadFile = File(...)):
             )
         
         # 임시 파일로 저장
-        temp_filename = await image_utils.save_temp_image(file)
-        
-        # 파일 크기 가져오기
-        temp_path = os.path.join("uploads/temp", temp_filename)
-        file_size = os.path.getsize(temp_path) if os.path.exists(temp_path) else 0
+        temp_filename, file_size = await image_utils.save_temp_image(file)
         
         return ImageUploadResponse(
             message="이미지가 성공적으로 업로드되었습니다",
