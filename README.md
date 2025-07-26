@@ -44,9 +44,14 @@ mini/
    ```
 
 ## 주요 화면 예시
-(스크린샷은 docs/images/에 넣고 아래처럼 링크)
 
-![메인화면](docs/images/main-screen.png)
+![캘린더 메인](docs/images/calender.main.png)
+![일기 작성](docs/images/daily_register.png)
+![일기 수정](docs/images/daiy_modified.png)
+![카테고리 설정](docs/images/category.png)
+![마이페이지](docs/images/my_page.png)
+![로그인](docs/images/login.png)
+![회원가입](docs/images/register.png)
 
 ## API 문서
 - 백엔드: http://localhost:8000/docs
