@@ -45,13 +45,23 @@ mini/
 
 ## 주요 화면 예시
 
-![캘린더 메인](docs/images/calender.main.png)
-![일기 작성](docs/images/daily_register.png)
-![일기 수정](docs/images/daiy_modified.png)
-![카테고리 설정](docs/images/category.png)
-![마이페이지](docs/images/my_page.png)
-![로그인](docs/images/login.png)
-![회원가입](docs/images/register.png)
+<table>
+  <tr>
+    <td><img src="docs/images/calender.main.png" width="200" alt="캘린더 메인"></td>
+    <td><img src="docs/images/daily_register.png" width="200" alt="일기 작성"></td>
+    <td><img src="docs/images/daiy_modified.png" width="200" alt="일기 수정"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/category.png" width="200" alt="카테고리 설정"></td>
+    <td><img src="docs/images/my_page.png" width="200" alt="마이페이지"></td>
+    <td><img src="docs/images/login.png" width="200" alt="로그인"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/member_register.png" width="200" alt="회원가입"></td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
 
 ## API 문서
 - 백엔드: http://localhost:8000/docs
