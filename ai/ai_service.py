@@ -57,6 +57,12 @@ class DiaryEntry(BaseModel):
 class ComfortResponse(BaseModel):
     message: str
 
+class EmotionExtractionRequest(BaseModel):
+    text: str
+
+class EmotionExtractionResponse(BaseModel):
+    emotion: str
+
 def allowed_file(filename):
     """파일 확장자 검증"""
     return '.' in filename and \
@@ -254,6 +260,78 @@ def analyze_diary(entry: DiaryEntry) -> str:
         logger.error(f"일기 분석 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"일기 처리 중 오류 발생: {str(e)}")
 
+def extract_emotion(text: str) -> str:
+    """일기 내용에서 감정을 추출"""
+    if not api_key:
+        return "neutral"
+    
+    try:
+        # 일기 내용을 기반으로 감정 추출
+        prompt = f"""
+다음은 사용자가 작성한 일기입니다. 이 일기에서 가장 강하게 드러나는 감정을 분석해주세요.
+
+일기 내용:
+{text}
+
+다음 감정 중에서 가장 적합한 하나를 선택해서 영어로만 답변해주세요:
+- happy (행복, 기쁨)
+- sad (슬픔, 우울)
+- angry (화남, 분노)
+- excited (신남, 흥분)
+- anxious (불안, 걱정)
+- calm (평온, 차분)
+- confident (자신감, 확신)
+- confused (혼란, 당황)
+- determined (결심, 의지)
+- love (사랑, 애정)
+- touched (감동, 감사)
+- neutral (중립, 평범)
+
+감정:
+"""
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "당신은 감정 분석 전문가입니다. 주어진 텍스트에서 가장 강하게 드러나는 감정을 정확히 분석합니다."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_tokens": 10,
+            "temperature": 0.3
+        }
+        
+        with httpx.Client() as client:
+            response = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        if not result.get("choices") or not result["choices"][0].get("message", {}).get("content"):
+            return "neutral"
+
+        emotion = result["choices"][0]["message"]["content"].strip().lower()
+        logger.info(f"감정 추출 완료: {emotion}")
+        return emotion
+            
+    except Exception as e:
+        logger.error(f"감정 추출 중 예외 발생: {str(e)}")
+        return "neutral"
+
 # STT 엔드포인트
 @app.post("/stt/transcribe")
 async def transcribe_audio_endpoint(
@@ -328,10 +406,13 @@ async def transcribe_audio_endpoint(
 
 # TTS 엔드포인트
 @app.get("/tts")
-async def text_to_speech(text: str = Query(..., description="음성으로 변환할 텍스트")):
+async def text_to_speech(
+    text: str = Query(..., description="음성으로 변환할 텍스트"),
+    volume: int = Query(50, description="음성 볼륨 (0-100)", ge=0, le=100)
+):
     """텍스트를 음성으로 변환하는 엔드포인트"""
     try:
-        logger.info(f"TTS 요청 받음: {text}")
+        logger.info(f"TTS 요청 받음: {text} (볼륨: {volume}%)")
         tts = gTTS(text, lang='ko', slow=False)
         filename = f"{uuid.uuid4()}.mp3"
         filepath = os.path.join(TTS_OUTPUT_DIR, filename)
@@ -412,6 +493,20 @@ async def analyze_diary_endpoint(entry: DiaryEntry):
     except Exception as e:
         logger.error(f"일기 분석 오류: {str(e)}")
         raise HTTPException(status_code=500, detail="일기 분석 중 오류가 발생했습니다.")
+
+# 감정 추출 엔드포인트
+@app.post("/diary/extract-emotion", response_model=EmotionExtractionResponse)
+async def extract_emotion_endpoint(request: EmotionExtractionRequest):
+    """일기 내용에서 감정을 추출하는 엔드포인트"""
+    try:
+        emotion = extract_emotion(request.text)
+        return EmotionExtractionResponse(emotion=emotion)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"감정 추출 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail="감정 추출 중 오류가 발생했습니다.")
 
 # 헬스 체크 엔드포인트
 @app.get("/health")
