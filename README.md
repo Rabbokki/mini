@@ -45,6 +45,8 @@ mini/
 
 ## 주요 화면 예시
 
+<div align="center">
+
 <table>
   <tr>
     <td><img src="docs/images/calender.main.png" width="200" alt="캘린더 메인"></td>
@@ -62,6 +64,8 @@ mini/
     <td></td>
   </tr>
 </table>
+
+</div>
 
 ## API 문서
 - 백엔드: http://localhost:8000/docs
