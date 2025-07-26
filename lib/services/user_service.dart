@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserService {
-  static const String baseUrl = 'http://192.168.43.129:8001/api';
+  static const String baseUrl = 'http://10.0.2.2:8000/api';
 
   // 사용자 생일 정보 업데이트
   static Future<bool> updateUserBirthday(String userId, DateTime birthday) async {

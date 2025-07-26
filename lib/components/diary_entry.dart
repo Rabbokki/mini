@@ -62,6 +62,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   String _partialText = ''; // 부분 인식 텍스트
   String _status = ''; // 녹음 상태 메시지
   bool _isEditMode = false; // 수정 모드 여부
+  String? _currentPostId; // 현재 일기의 post_id
 
   late AnimationController _fadeAnimationController;
   late Animation<double> _fadeAnimation;
@@ -213,13 +214,12 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _loadDiaryData();
-    _entryController = TextEditingController(text: widget.existingEntry?.entry ?? '');
-    _isSaved = widget.existingEntry?.entry != null;
-    _currentEmoji = widget.existingEntry?.emoji ?? '';
-    _uploadedImages = List.from(widget.existingEntry?.images ?? []);
-    _hasText = _entryController.text.trim().isNotEmpty;
-    _isEditMode = !_isSaved; // 새 일기는 true, 저장된 일기는 false
+    _entryController = TextEditingController();
+    _isSaved = false;
+    _currentEmoji = '';
+    _uploadedImages = [];
+    _hasText = false;
+    _isEditMode = true; // 기본적으로 새 일기 모드
 
     _fadeAnimationController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -229,10 +229,6 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
       parent: _fadeAnimationController,
       curve: Curves.easeInOut,
     );
-
-    if (widget.existingEntry?.entry != null && _aiMessage.isEmpty) {
-      _fetchAIMessage(widget.existingEntry!.entry!);
-    }
 
     // STT 서비스 연결 테스트
     _testSTTConnection();
@@ -246,6 +242,9 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         });
       }
     });
+
+    // 일기 데이터 로드
+    _loadDiaryData();
   }
 
   Future<void> _loadDiaryData() async {
@@ -263,6 +262,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         print(diaryData['images']);
         print('==== [DEBUG] diaryData["images"] 타입:');
         print(diaryData['images']?.runtimeType);
+        if (!mounted) return;
         setState(() {
           _entryController.text = diaryData['content'] ?? '';
           _uploadedImages = (diaryData['images'] as List?)?.map((e) {
@@ -273,16 +273,21 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
             if (e is String) {
               // file_path에서 filename만 추출
               final filename = e.split('/').last;
-              return {"filename": filename, "url": 'http://192.168.43.129:8001/api/images/$filename', "isNew": false}; // 기존 이미지
+              return {"filename": filename, "url": 'http://10.0.2.2:8000/api/images/$filename', "isNew": false}; // 기존 이미지
             } else if (e is Map<String, dynamic>) {
-              return {"filename": e["filename"] ?? '', "url": 'http://192.168.43.129:8001/api/images/${e["filename"] ?? ''}', "isNew": false}; // 기존 이미지
+              // ImageInfo 객체에서 filename 추출
+              final filename = e["filename"] ?? '';
+              return {"filename": filename, "url": 'http://10.0.2.2:8000/api/images/$filename', "isNew": false}; // 기존 이미지
             } else {
               return {"filename": '', "url": '', "isNew": false};
             }
           }).toList() ?? [];
           _isSaved = true;
+          _isEditMode = false; // 기존 일기가 있으면 수정 모드
           _hasText = _entryController.text.trim().isNotEmpty;
           _currentEmoji = diaryData['emoji'] ?? _getUserEmoticon(Emotion.neutral);
+          // post_id 저장
+          _currentPostId = diaryData['post_id'] ?? diaryData['id'];
         });
         await _fetchAIMessage(diaryData['content']);
       }
@@ -317,6 +322,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
       final aiMessage = await OpenAIService.analyzeDiary(widget.selectedDate, text);
       
       if (aiMessage != null) {
+        if (!mounted) return;
         setState(() {
           _aiMessage = aiMessage;
           _fadeAnimationController.forward();
@@ -330,6 +336,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
       }
     } catch (e) {
       print('AI 메시지 요청 중 오류: $e');
+      if (!mounted) return;
       setState(() {
         _aiMessage = 'AI 메시지를 가져오지 못했습니다. 다시 시도해주세요.';
       });
@@ -500,38 +507,24 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
           .whereType<String>()
           .toList();
       
-      if (_isSaved && _isEditMode && widget.existingEntry != null) {
+      if (_currentPostId != null) {
         // 수정 모드: updateDiary 호출
-        // id 필드명 유연하게 추출
-        final dynamic entry = widget.existingEntry;
-        String? postId;
-        if (entry != null) {
-          if (entry is Map && entry['id'] != null) {
-            postId = entry['id'] as String;
-          } else if (entry is Map && entry['postId'] != null) {
-            postId = entry['postId'] as String;
-          } else if (entry is Map && entry['post_id'] != null) {
-            postId = entry['post_id'] as String;
-          } else if (entry is dynamic && entry.id != null) {
-            postId = entry.id as String;
-          } else if (entry is dynamic && entry.postId != null) {
-            postId = entry.postId as String;
-          } else if (entry is dynamic && entry.post_id != null) {
-            postId = entry.post_id as String;
-          }
-        }
-        if (postId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('일기 ID를 찾을 수 없습니다.')),
-          );
-          setState(() { _isAnalyzing = false; });
-          return;
-        }
+        final postId = _currentPostId!;
+        // 기존 이미지와 새 이미지 모두 합치기
+        final existingImages = _uploadedImages
+            .where((img) => img['isNew'] != true)
+            .map((img) => img["filename"] ?? '')
+            .whereType<String>();
+        final newImages = _uploadedImages
+            .where((img) => img['isNew'] == true)
+            .map((img) => img["filename"] ?? '')
+            .whereType<String>();
+        final allImages = [...existingImages, ...newImages];
         final success = await DiaryService().updateDiary(
           postId: postId,
           content: _entryController.text,
           emotion: emotion,
-          images: newImages.isNotEmpty ? newImages : null,
+          images: allImages.isNotEmpty ? allImages : null,
         );
         if (success) {
           await _fetchAIMessage(_entryController.text);
@@ -561,10 +554,16 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
         }
       } else {
         // 새 일기: createDiary 호출
+        final newImages = _uploadedImages
+            .where((img) => img['isNew'] == true)
+            .map((img) => img["filename"] ?? '')
+            .whereType<String>()
+            .toList();
         await DiaryService().createDiary(
           content: _entryController.text,
           emotion: emotion,
           images: newImages.isNotEmpty ? newImages : null,
+          date: "${widget.selectedDate}T00:00:00", // ISO8601 datetime 포맷으로 전달
         );
         await _fetchAIMessage(_entryController.text);
         setState(() {
@@ -648,15 +647,15 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
 
         // 이미지 업로드
         final filename = await _diaryService.uploadImage(File(image.path));
-        final url = 'http://192.168.43.129:8001/api/images/$filename';
+        final url = 'http://10.0.2.2:8000/api/images/$filename';
         setState(() {
           _uploadedImages.add({"filename": filename, "url": url, "isNew": true}); // 새 이미지 표시
           // 항상 map 변환 강제
           _uploadedImages = _uploadedImages.map((e) {
             if (e is String) {
-              return {"filename": e, "url": 'http://192.168.43.129:8001/api/images/$e', "isNew": true};
+              return {"filename": e, "url": 'http://10.0.2.2:8000/api/images/$e', "isNew": true};
             } else if (e is Map<String, dynamic>) {
-              return {"filename": e["filename"] ?? '', "url": 'http://192.168.43.129:8001/api/images/${e["filename"] ?? ''}', "isNew": e["isNew"] ?? false};
+              return {"filename": e["filename"] ?? '', "url": 'http://10.0.2.2:8000/api/images/${e["filename"] ?? ''}', "isNew": e["isNew"] ?? false};
             } else {
               return {"filename": '', "url": '', "isNew": false};
             }
@@ -688,38 +687,39 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   Future<void> _handleImageDelete(int index) async {
     if (!_isEditMode) return; // 수정모드가 아닐 때는 삭제 불가
     try {
-      final filename = _uploadedImages[index]["filename"] ?? '';
+      final img = _uploadedImages[index];
+      String filename = '';
+      bool isNewImage = false;
       
-      final success = await _diaryService.deleteImage(filename);
-      
-      if (success) {
-        setState(() {
-          _uploadedImages.removeAt(index);
-          _uploadedImages = _uploadedImages.map((e) {
-            if (e is String) {
-              return {"filename": e, "url": 'http://192.168.43.129:8001/api/images/$e', "isNew": true};
-            } else if (e is Map<String, dynamic>) {
-              return {"filename": e["filename"] ?? '', "url": 'http://192.168.43.129:8001/api/images/${e["filename"] ?? ''}', "isNew": e["isNew"] ?? false};
-            } else {
-              return {"filename": '', "url": '', "isNew": false};
-            }
-          }).toList();
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('이미지가 삭제되었습니다'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (img is Map<String, dynamic>) {
+        filename = img["filename"] ?? '';
+        isNewImage = img["isNew"] == true;
+      } else if (img is String) {
+        filename = img as String;
+        isNewImage = false; // String 타입은 기존 이미지로 간주
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('이미지 삭제에 실패했습니다'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        throw Exception('이미지 정보를 가져올 수 없습니다');
       }
+      
+      // 새로 추가된 이미지인 경우에만 서버에서 파일 삭제
+      if (isNewImage) {
+        final success = await _diaryService.deleteImage(filename);
+        if (!success) {
+          throw Exception('서버에서 이미지 삭제에 실패했습니다');
+        }
+      }
+      
+      // UI에서 이미지 제거
+      setState(() {
+        _uploadedImages.removeAt(index);
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isNewImage ? '이미지가 삭제되었습니다' : '이미지가 제거되었습니다'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -768,7 +768,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(covariant DiaryEntry oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if ((_isSaved || widget.existingEntry?.entry != null) && _aiMessage.isNotEmpty && !_isTtsPlaying && !_isTtsLoading) {
+    if (_isSaved && _aiMessage.isNotEmpty && !_isTtsPlaying && !_isTtsLoading) {
       _playTTS();
     }
   }
@@ -944,7 +944,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                               children: [
                                 Row(
                                   children: [
-                                    if (_isSaved || widget.existingEntry?.entry != null)
+                                    if (_isSaved)
                                       Container(
                                         width: 48,
                                         height: 48,
@@ -972,7 +972,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                                 ),
                                         ),
                                       ),
-                                    if (_isSaved || widget.existingEntry?.entry != null)
+                                    if (_isSaved)
                                       const SizedBox(width: 16),
                                     Padding(
                                       padding: const EdgeInsets.only(left: 8.0),
@@ -1086,9 +1086,9 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                   final img = _uploadedImages[index];
                                   String imgUrl = '';
                                   if (img is Map<String, dynamic>) {
-                                    imgUrl = 'http://192.168.43.129:8001/api/images/${img["filename"] ?? ''}';
+                                    imgUrl = 'http://10.0.2.2:8000/api/images/${img["filename"] ?? ''}';
                                   } else if (img is String) {
-                                    imgUrl = 'http://192.168.43.129:8001/api/images/$img';
+                                    imgUrl = 'http://10.0.2.2:8000/api/images/$img';
                                   } else {
                                     print('itemBuilder: img 타입 이상, Container 반환');
                                     return Container(); // 타입 에러 방지
@@ -1158,7 +1158,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                             fontSize: 16,
                                           ),
                                           decoration: InputDecoration(
-                                            hintText: widget.existingEntry?.entry != null
+                                            hintText: _isSaved
                                                 ? "일기를 수정해보세요..."
                                                 : "오늘의 이야기를 작성해보세요...",
                                             hintStyle: TextStyle(
@@ -1375,7 +1375,7 @@ class _DiaryEntryState extends State<DiaryEntry> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
-                            if ((_isSaved || widget.existingEntry?.entry != null) && _aiMessage.isNotEmpty)
+                            if (_isSaved && _aiMessage.isNotEmpty)
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [

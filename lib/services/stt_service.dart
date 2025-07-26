@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 
 class STTService {
-  static const String _baseUrl = 'http://192.168.43.129:5002';
+  static const String _baseUrl = 'http://10.0.2.2:8002';
   
   /// 오디오 파일을 텍스트로 변환
   static Future<STTResult> transcribeAudio(File audioFile, {String language = 'ko'}) async {
@@ -107,8 +107,8 @@ class STTService {
   /// 서비스 상태 확인
   static Future<Map<String, dynamic>> healthCheck() async {
     try {
-      print('STT 서비스 연결 테스트: $_baseUrl/stt/health');
-      final response = await http.get(Uri.parse('$_baseUrl/stt/health'));
+      print('STT 서비스 연결 테스트: $_baseUrl/health');
+      final response = await http.get(Uri.parse('$_baseUrl/health'));
       
       print('STT 서비스 응답 상태: ${response.statusCode}');
       print('STT 서비스 응답 내용: ${response.body}');

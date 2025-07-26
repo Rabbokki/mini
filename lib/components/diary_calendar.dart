@@ -181,10 +181,12 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
       final fortune = await FortuneService.generateFortune(birthdayString);
       
       if (fortune != null) {
+        if (!mounted) return;
         setState(() {
           _currentFortune = fortune;
         });
       } else {
+        if (!mounted) return;
         // API 실패 시 기본 운세 사용
         setState(() {
           _currentFortune = FortuneService.getDefaultFortune(birthday);
@@ -193,10 +195,12 @@ class _DiaryCalendarState extends State<DiaryCalendar> {
     } catch (e) {
       print('운세 로딩 중 오류: $e');
       // 오류 발생 시 기본 운세 사용
+      if (!mounted) return;
       setState(() {
         _currentFortune = FortuneService.getDefaultFortune(birthday);
       });
     } finally {
+      if (!mounted) return;
       setState(() {
         _isLoadingFortune = false;
       });

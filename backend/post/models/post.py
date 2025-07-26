@@ -22,6 +22,7 @@ class PostCreate(BaseModel):
     status: PostStatus = PostStatus.PUBLISHED
     emotion: Optional[str] = "neutral"  # 감정 정보 추가
     images: Optional[List[str]] = []  # 임시 업로드된 이미지 파일명 리스트
+    created_at: Optional[datetime] = None  # 클라이언트에서 날짜 지정 가능하도록 추가
     
     @validator('content')
     def content_must_not_be_empty(cls, v):

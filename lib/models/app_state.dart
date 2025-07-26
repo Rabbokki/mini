@@ -34,11 +34,21 @@ class EmotionData {
   }
 
   factory EmotionData.fromJson(Map<String, dynamic> json) {
+    // images 처리: List<Map>에서 filename만 추출하여 List<String>으로 변환
+    List<String>? images;
+    final imagesRaw = json['images'];
+    if (imagesRaw is List) {
+      images = imagesRaw
+          .map((e) => e is Map && e['filename'] != null ? e['filename'] as String : null)
+          .whereType<String>()
+          .toList();
+    }
+    
     return EmotionData(
       emotion: Emotion.values.firstWhere((e) => e.name == json['emotion']),
       emoji: json['emoji'],
       entry: json['entry'],
-      images: json['images']?.cast<String>(),
+      images: images,
     );
   }
 }
@@ -316,7 +326,16 @@ class AppState extends ChangeNotifier {
         // 백엔드에서 가져온 이모지 URL 사용 (Firebase URL)
         final emoji = entry['emoji'] as String? ?? emotionEmojis[emotion]!;
         final diaryEntry = entry['entry'] as String?;
-        final images = entry['images'] as List<String>?;
+        
+        // images 처리: List<Map>에서 filename만 추출하여 List<String>으로 변환
+        List<String>? images;
+        final imagesRaw = entry['images'];
+        if (imagesRaw is List) {
+          images = imagesRaw
+              .map((e) => e is Map && e['filename'] != null ? e['filename'] as String : null)
+              .whereType<String>()
+              .toList();
+        }
         
         _emotionData[date] = EmotionData(
           emotion: emotion,

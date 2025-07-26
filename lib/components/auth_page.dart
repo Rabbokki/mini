@@ -32,10 +32,10 @@ class _AuthPageState extends State<AuthPage> {
     setState(() { errorMessage = ''; });
     try {
       print('로그인 시도: $email');
-      print('API URL: http://192.168.0.12:8001/auth/login');
+      print('API URL: http://10.0.2.2:8000/api/auth/login');
       
       final response = await http.post(
-        Uri.parse('http://192.168.43.129:8001/api/auth/login'),
+        Uri.parse('http://10.0.2.2:8000/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
@@ -79,7 +79,7 @@ class _AuthPageState extends State<AuthPage> {
     setState(() { errorMessage = ''; });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.43.129:8001/api/auth/register'),
+        Uri.parse('http://10.0.2.2:8000/api/auth/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': name,

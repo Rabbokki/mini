@@ -48,7 +48,7 @@ async def create_post(post_data: PostCreate, current_user_id: int = Depends(get_
         post_id = str(uuid.uuid4())
         
         # 현재 시간
-        current_time = datetime.now()
+        current_time = post_data.created_at if post_data.created_at else datetime.now()
         
         # 이미지 처리
         images_info = []
@@ -155,21 +155,22 @@ async def get_posts(current_user_id: int = Depends(get_current_user)):
         for doc in cursor:
             # 이미지 정보 변환
             images = []
-            for img_data in doc.get("images", []):
-                images.append(ImageInfo(
-                    filename=img_data["filename"],
-                    original_filename=img_data["original_filename"],
-                    file_path=img_data["file_path"],
-                    file_size=img_data["file_size"],
-                    upload_date=img_data["upload_date"]
-                ))
-            
+            raw_images = doc.get("images", [])
+            if isinstance(raw_images, list):
+                for img_data in raw_images:
+                    if isinstance(img_data, dict):
+                        images.append(ImageInfo(
+                            filename=img_data.get("filename", ""),
+                            original_filename=img_data.get("original_filename", ""),
+                            file_path=img_data.get("file_path", ""),
+                            file_size=img_data.get("file_size", 0),
+                            upload_date=img_data.get("upload_date", "")
+                        ))
+            # 리스트가 아니거나, 리스트 내 요소가 dict가 아니면 images는 빈 리스트로 둠
             posts.append(PostListResponse(
                 id=doc["post_id"],
                 content=doc["content"],
                 status=doc["status"],
-                emotion=doc.get("emotion", "neutral"),
-                emoji=doc.get("emoji", "https://firebasestorage.googleapis.com/v0/b/diary-3bbf7.firebasestorage.app/o/shape%2Fneutral_shape-removebg-preview.png?alt=media&token=02e85132-3a83-4257-8c1e-d2e478c7fcf5"),
                 created_at=doc["created_at"],
                 images=images
             ))
@@ -260,8 +261,40 @@ async def update_post(post_id: str, post_data: PostUpdate, current_user_id: int 
         # 변경된 필드만 업데이트
         update_data = post_data.dict(exclude_unset=True)
         
+        # 이미지 필드가 있으면 ImageInfo 객체로 변환
+        if "images" in update_data and update_data["images"] is not None:
+            images_info = []
+            current_time = datetime.now()
+            for filename in update_data["images"]:
+                # 기존 이미지 정보가 있는지 확인
+                existing_image = None
+                if "images" in existing_post:
+                    for img in existing_post["images"]:
+                        # img가 문자열인 경우와 딕셔너리인 경우 모두 처리
+                        if isinstance(img, str) and img == filename:
+                            existing_image = {"filename": filename, "original_filename": filename, "file_path": os.path.join("uploads/images", filename), "file_size": 0, "upload_date": current_time}
+                            break
+                        elif isinstance(img, dict) and img.get("filename") == filename:
+                            existing_image = img
+                            break
+                
+                if existing_image:
+                    # 기존 이미지 정보 재사용
+                    images_info.append(existing_image)
+                else:
+                    # 새 이미지 정보 생성
+                    file_info = image_utils.get_file_info(filename)
+                    images_info.append({
+                        "filename": filename,
+                        "original_filename": filename,
+                        "file_path": os.path.join("uploads/images", filename),
+                        "file_size": file_info["file_size"] if file_info else 0,
+                        "upload_date": current_time
+                    })
+            
+            update_data["images"] = images_info
+        
         result = collection.update_one(
-            {"post_id": post_id},
             {"post_id": post_id, "user_id": current_user_id},
             {"$set": update_data}
         )
@@ -310,7 +343,6 @@ async def delete_post(post_id: str, current_user_id: int = Depends(get_current_u
         
         # 소프트 삭제 (상태만 변경)
         result = collection.update_one(
-            {"post_id": post_id},
             {"post_id": post_id, "user_id": current_user_id},
             {"$set": {
                 "status": PostStatus.DELETED
@@ -366,15 +398,18 @@ async def get_posts_by_date(date: str, current_user_id: int = Depends(get_curren
         for doc in cursor:
             # 이미지 정보 변환
             images = []
-            for img_data in doc.get("images", []):
-                images.append(ImageInfo(
-                    filename=img_data["filename"],
-                    original_filename=img_data["original_filename"],
-                    file_path=img_data["file_path"],
-                    file_size=img_data["file_size"],
-                    upload_date=img_data["upload_date"]
-                ))
-            
+            raw_images = doc.get("images", [])
+            if isinstance(raw_images, list):
+                for img_data in raw_images:
+                    if isinstance(img_data, dict):
+                        images.append(ImageInfo(
+                            filename=img_data.get("filename", ""),
+                            original_filename=img_data.get("original_filename", ""),
+                            file_path=img_data.get("file_path", ""),
+                            file_size=img_data.get("file_size", 0),
+                            upload_date=img_data.get("upload_date", "")
+                        ))
+            # 리스트가 아니거나, 리스트 내 요소가 dict가 아니면 images는 빈 리스트로 둠
             posts.append(PostListResponse(
                 id=doc["post_id"],
                 content=doc["content"],
@@ -392,6 +427,11 @@ async def get_posts_by_date(date: str, current_user_id: int = Depends(get_curren
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"일기 목록 조회 중 오류가 발생했습니다: {str(e)}"
         )
+
+@router.put("/{post_id}", response_model=PostUpdateResponse)
+async def update_post_route(post_id: str, post_data: PostUpdate, current_user_id: int = Depends(get_current_user)):
+    """일기 수정"""
+    return await update_post(post_id, post_data, current_user_id)
 
 @router.post("/upload-image", response_model=ImageUploadResponse)
 async def upload_image(file: UploadFile = File(...)):
@@ -437,10 +477,15 @@ async def upload_image(file: UploadFile = File(...)):
 
 @router.delete("/delete-image/{filename}", response_model=ImageDeleteResponse)
 async def delete_image(filename: str):
-    """이미지 삭제"""
+    """이미지 삭제 (임시 또는 영구 파일)"""
     try:
-        # 임시 파일 삭제
-        if image_utils.delete_temp_file(filename):
+        # 임시 파일 삭제 시도
+        temp_deleted = image_utils.delete_temp_file(filename)
+        
+        # 영구 파일 삭제 시도
+        permanent_deleted = image_utils.delete_permanent_file(filename)
+        
+        if temp_deleted or permanent_deleted:
             return ImageDeleteResponse(
                 message="이미지가 성공적으로 삭제되었습니다",
                 filename=filename
@@ -448,7 +493,7 @@ async def delete_image(filename: str):
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="임시 파일을 찾을 수 없습니다"
+                detail="이미지 파일을 찾을 수 없습니다"
             )
         
     except HTTPException:

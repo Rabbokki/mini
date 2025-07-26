@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class TTSService {
-  static const String baseUrl = 'http://192.168.43.129:5050';
+  static const String baseUrl = 'http://10.0.2.2:8002';
 
   /// 텍스트를 음성으로 변환
   static Future<String?> textToSpeech(String text) async {

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class OpenAIService {
-  static const String baseUrl = 'http://192.168.43.129:8002';
+  static const String baseUrl = 'http://10.0.2.2:8002';
 
   /// 일기 내용을 분석하고 위로 메시지 생성
   static Future<String?> analyzeDiary(String date, String content) async {
@@ -10,7 +10,7 @@ class OpenAIService {
       print('일기 분석 요청: $date - ${content.substring(0, content.length > 50 ? 50 : content.length)}...');
       
       final response = await http.post(
-        Uri.parse('$baseUrl/api/analyze-diary'),
+        Uri.parse('$baseUrl/diary/analyze'),
         headers: {
           'Content-Type': 'application/json',
         },

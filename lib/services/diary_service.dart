@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_state.dart';
 
 class DiaryService {
-  static const String baseUrl = 'http://192.168.43.129:8001'; // FastAPI 서버 주소
+  static const String baseUrl = 'http://10.0.2.2:8000'; // FastAPI 서버 주소
 
   // 토큰 가져오기 헬퍼 함수
   static Future<String?> _getToken() async {
@@ -59,6 +59,7 @@ class DiaryService {
     required String content,
     required Emotion emotion,
     List<String>? images,
+    String? date,
   }) async {
     try {
       print('일기 저장 API 호출 시작');
@@ -79,6 +80,7 @@ class DiaryService {
           'status': 'published',
           'emotion': emotion.name,  // 감정 정보 추가
           'images': images ?? [],
+          'created_at': date,  // 선택한 날짜 전달
         }),
       );
 
@@ -127,6 +129,8 @@ class DiaryService {
             'content': data[0]['content'],
             'images': data[0]['images'],
             'created_at': data[0]['created_at'],
+            'post_id': data[0]['id'], // 백엔드에서는 'id' 필드 사용
+            'emoji': data[0]['emoji'] ?? '',
           };
         }
         return null; // 해당 날짜의 일기가 없음

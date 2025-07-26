@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FortuneService {
-  static const String baseUrl = 'http://192.168.43.129:5001'; // AI 서비스 URL
+  static const String baseUrl = 'http://10.0.2.2:8002'; // AI 서비스 URL
 
   /// OpenAI를 사용해서 개인화된 운세를 생성합니다.
   static Future<String?> generateFortune(String birthday) async {
